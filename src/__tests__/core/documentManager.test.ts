@@ -1,6 +1,5 @@
 import { DocumentManager } from '../../core/documentManager';
 import { LocalStorage } from '../../storage/localStorage';
-import { TextNormalizer } from '../../normalization/textNormalizer';
 import { ContentType } from '../../types/content';
 import * as fs from 'fs/promises';
 import * as path from 'path';
