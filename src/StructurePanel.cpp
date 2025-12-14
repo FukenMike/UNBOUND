@@ -83,7 +83,7 @@ void StructurePanel::buildDefaultStructure()
         item->setText(0, itemName);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsEditable | 
                        Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled);
-        item->setCheckState(0, Qt::Checked);
+        item->setCheckState(0, Qt::Unchecked);
         item->setData(0, Qt::UserRole, QString("item_%1").arg(itemCounter++));
     }
 
@@ -101,7 +101,7 @@ void StructurePanel::buildDefaultStructure()
         auto* item = new QTreeWidgetItem(backMatter);
         item->setText(0, itemName);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsEditable);
-        item->setCheckState(0, Qt::Checked);
+        item->setCheckState(0, Qt::Unchecked);
         item->setData(0, Qt::UserRole, QString("item_%1").arg(itemCounter++));
     }
 }

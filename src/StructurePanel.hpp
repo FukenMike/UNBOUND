@@ -9,8 +9,8 @@
  * 
  * Displays hierarchical organization:
  * - Front Matter (unchecked items)
- * - Body (checked items, supports drag-drop reordering)
- * - Back Matter (checked items)
+ * - Body (unchecked items, supports drag-drop reordering)
+ * - Back Matter (unchecked items)
  * 
  * Each item is checkable, selectable, and editable on double-click.
  * Only Body items support drag-and-drop reordering.

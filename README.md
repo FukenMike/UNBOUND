@@ -32,8 +32,8 @@ make -j$(nproc)
 ### Structure Panel (Left Sidebar)
 Hierarchical document organization:
 - **Front Matter** (unchecked by default): Copyright, Dedication, Epigraph, TOC, Foreword, Preface, Acknowledgments
-- **Body** (checked): Prologue, Introduction, Untitled Chapter, Conclusion, Epilogue, Afterword
-- **Back Matter** (checked): Notes, About the Author
+- **Body** (unchecked): Prologue, Introduction, Untitled Chapter, Conclusion, Epilogue, Afterword
+- **Back Matter** (unchecked): Notes, About the Author
 
 Features:
 - ✓ Double-click to rename items
