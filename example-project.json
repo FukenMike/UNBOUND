@@ -1,0 +1,109 @@
+{
+  "id": "project_example_001",
+  "title": "The Writer's Journey",
+  "author": "Sample Author",
+  "sections": [
+    {
+      "id": "section_front_001",
+      "kind": "frontMatter",
+      "title": "Front Matter",
+      "order": 1,
+      "chapters": [
+        {
+          "id": "chapter_dedication_001",
+          "title": "Dedication",
+          "order": 1,
+          "paragraphs": [
+            {
+              "id": "para_001",
+              "order": 1,
+              "content": "For all the writers who dare to begin."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "section_body_001",
+      "kind": "body",
+      "order": 2,
+      "chapters": [
+        {
+          "id": "chapter_001",
+          "title": "Chapter One: The Beginning",
+          "number": 1,
+          "order": 1,
+          "scenes": [
+            {
+              "id": "scene_001",
+              "label": "Opening Scene",
+              "order": 1,
+              "paragraphs": [
+                {
+                  "id": "para_002",
+                  "order": 1,
+                  "content": "The morning light filtered through the dusty window."
+                },
+                {
+                  "id": "para_003",
+                  "order": 2,
+                  "content": "She sat at her desk, fingers poised above the keyboard."
+                }
+              ]
+            },
+            {
+              "id": "scene_002",
+              "order": 2,
+              "paragraphs": [
+                {
+                  "id": "para_004",
+                  "order": 1,
+                  "content": "The words began to flow."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "chapter_002",
+          "title": "Chapter Two: The Journey",
+          "number": 2,
+          "order": 2,
+          "scenes": [
+            {
+              "id": "scene_003",
+              "order": 1,
+              "paragraphs": [
+                {
+                  "id": "para_005",
+                  "order": 1,
+                  "content": "Every story has its challenges."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "section_back_001",
+      "kind": "backMatter",
+      "title": "Back Matter",
+      "order": 3,
+      "chapters": [
+        {
+          "id": "chapter_acknowledgments_001",
+          "title": "Acknowledgments",
+          "order": 1,
+          "paragraphs": [
+            {
+              "id": "para_006",
+              "order": 1,
+              "content": "Thank you to everyone who supported this journey."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UNBOUND</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="app">
+    <!-- Left: Structure/Navigation Panel -->
+    <aside id="structure-panel" class="panel panel-structure">
+      <div class="panel-header">
+        <h2 class="panel-title">Structure</h2>
+        <div class="structure-actions">
+          <button id="load-project-btn" class="load-btn" title="Load Project">Open</button>
+          <button id="add-chapter-btn" class="add-btn" title="Add Chapter">+</button>
+        </div>
+      </div>
+      <div class="panel-content">
+        <div id="structure-tree" class="structure-tree">
+          <div class="empty-state">No project loaded</div>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <div id="word-count">0 words</div>
+      </div>
+    </aside>
+
+    <!-- Resizer for left panel -->
+    <div class="resizer resizer-left" data-panel="structure-panel"></div>
+
+    <!-- Center: Work Canvas -->
+    <main id="canvas" class="panel panel-canvas">
+      <div class="panel-content">
+        <!-- Wrap width control (subtle, minimal) -->
+        <div id="wrap-control" class="wrap-control" style="display: none;">
+          <label class="wrap-label">Wrap:</label>
+          <button class="wrap-preset" data-width="600">Narrow</button>
+          <button class="wrap-preset" data-width="800">Medium</button>
+          <button class="wrap-preset active" data-width="1000">Wide</button>
+          <button class="wrap-preset" data-width="0">Full</button>
+        </div>
+        
+        <!-- Writing surface -->
+        <div id="editor-container" class="editor-container">
+          <div id="editor-header" class="editor-header" style="display:none;">
+            <div class="editor-number" id="editor-number"></div>
+            <h1 class="editor-title" id="editor-title"></h1>
+          </div>
+          <textarea 
+            id="editor" 
+            class="editor" 
+            placeholder="Select a chapter to begin writing..."
+            spellcheck="true"
+          ></textarea>
+        </div>
+        
+        <!-- Empty state (shown when no chapter selected) -->
+        <div id="editor-empty" class="canvas-placeholder">
+          <div class="placeholder-icon">✦</div>
+          <p class="placeholder-text">Select a chapter to begin</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- Resizer for right panel -->
+    <div class="resizer resizer-right" data-panel="tools-panel"></div>
+
+    <!-- Right: Tools/Awareness Dock -->
+    <aside id="tools-panel" class="panel panel-tools">
+      <div class="panel-header">
+        <h2 class="panel-title">Tools</h2>
+        <button class="collapse-btn" data-panel="tools-panel" title="Collapse">−</button>
+      </div>
+      <div class="panel-content">
+        <div class="tools-rail">
+          <button class="tool-btn" data-action="search" title="Search">🔎</button>
+          <button class="tool-btn" data-action="wrap" title="Wrap Width">⤢</button>
+          <button class="tool-btn" data-action="stats" title="Stats">Σ</button>
+          <button class="tool-btn" data-action="export" title="Export">⤓</button>
+        </div>
+        <div class="tools-area">
+          <div id="tools-content">
+            <div id="search-panel" class="search-panel" style="display:none;">
+              <input id="search-input" class="search-input" placeholder="Find in chapter"/>
+              <button id="search-prev" class="search-btn">Prev</button>
+              <button id="search-next" class="search-btn">Next</button>
+              <span id="search-status" class="search-status"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Load compiled renderer JS from dist (ESM output requires type="module") -->
+  <script type="module" src="../../../dist/desktop/renderer/renderer.js"></script>
+</body>
+</html>
