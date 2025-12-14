@@ -1,0 +1,19 @@
+{
+  "name": "unbound",
+  "version": "1.0.0",
+  "description": "Local-first writer's cockpit - a desktop manuscript management application",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "demo": "ts-node src/demo.ts",
+    "test": "ts-node src/test.ts"
+  },
+  "keywords": ["writing", "manuscript", "desktop", "local-first"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.0.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
