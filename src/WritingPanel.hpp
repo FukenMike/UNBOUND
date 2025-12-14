@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QWidget>
-#include <QPlainTextEdit>
+#include <QTextEdit>
 #include <QLabel>
 
 class WritingPanel : public QWidget
@@ -11,14 +11,24 @@ class WritingPanel : public QWidget
 public:
     explicit WritingPanel(QWidget* parent = nullptr);
 
-    void setContent(const QString& content);
-    QString getContent() const;
+    // Content management
+    void setContentHtml(const QString& html);
+    void setContentPlain(const QString& text);
+    QString getContentHtml() const;
+    QString getContentPlain() const;
     void setTitle(const QString& title);
+    
+    // Editor access for menu actions
+    QTextEdit* editor() { return m_editor; }
+    
+    // Statistics
+    int wordCount() const;
 
 signals:
     void contentChanged(const QString& content);
+    void wordCountChanged(int count);
 
 private:
-    QLabel* titleLabel;
-    QPlainTextEdit* editor;
+    QLabel* m_titleLabel;
+    QTextEdit* m_editor;
 };
