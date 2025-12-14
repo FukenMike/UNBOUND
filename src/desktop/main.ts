@@ -50,9 +50,6 @@ function createWindow() {
   console.log('Loading renderer from:', rendererPath);
   mainWindow.loadFile(rendererPath);
 
-  // Open DevTools for debugging (always on during development)
-  mainWindow.webContents.openDevTools();
-
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
