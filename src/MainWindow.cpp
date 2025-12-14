@@ -6,7 +6,6 @@
 #include "PlanningPanel.hpp"
 #include "RevisionPanel.hpp"
 #include "model/Chapter.hpp"
-#include "core/MarkdownConverter.hpp"
 #include <QMenuBar>
 #include <QMenu>
 #include <QAction>
@@ -15,8 +14,7 @@
 #include <QMessageBox>
 #include <QFile>
 #include <QTextStream>
-#include <QFontDatabase>
-#include <QColorDialog>
+#include <QTextCursor>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -78,9 +76,6 @@ void MainWindow::setupMenus()
     
     // Format menu
     setupFormatMenu();
-    
-    // View menu
-    setupViewMenu();
 }
 
 void MainWindow::setupEditMenu()
@@ -90,21 +85,13 @@ void MainWindow::setupEditMenu()
     QAction* undoAction = editMenu->addAction("&Undo");
     undoAction->setShortcut(QKeySequence::Undo);
     connect(undoAction, &QAction::triggered, [this]() {
-        if (writingPanel->editorMode() == WritingPanel::MarkdownMode) {
-            writingPanel->markdownEditor()->undo();
-        } else {
-            writingPanel->richTextEditor()->undo();
-        }
+        writingPanel->editor()->undo();
     });
     
     QAction* redoAction = editMenu->addAction("&Redo");
     redoAction->setShortcut(QKeySequence::Redo);
     connect(redoAction, &QAction::triggered, [this]() {
-        if (writingPanel->editorMode() == WritingPanel::MarkdownMode) {
-            writingPanel->markdownEditor()->redo();
-        } else {
-            writingPanel->richTextEditor()->redo();
-        }
+        writingPanel->editor()->redo();
     });
     
     editMenu->addSeparator();
@@ -112,31 +99,19 @@ void MainWindow::setupEditMenu()
     QAction* cutAction = editMenu->addAction("Cu&t");
     cutAction->setShortcut(QKeySequence::Cut);
     connect(cutAction, &QAction::triggered, [this]() {
-        if (writingPanel->editorMode() == WritingPanel::MarkdownMode) {
-            writingPanel->markdownEditor()->cut();
-        } else {
-            writingPanel->richTextEditor()->cut();
-        }
+        writingPanel->editor()->cut();
     });
     
     QAction* copyAction = editMenu->addAction("&Copy");
     copyAction->setShortcut(QKeySequence::Copy);
     connect(copyAction, &QAction::triggered, [this]() {
-        if (writingPanel->editorMode() == WritingPanel::MarkdownMode) {
-            writingPanel->markdownEditor()->copy();
-        } else {
-            writingPanel->richTextEditor()->copy();
-        }
+        writingPanel->editor()->copy();
     });
     
     QAction* pasteAction = editMenu->addAction("&Paste");
     pasteAction->setShortcut(QKeySequence::Paste);
     connect(pasteAction, &QAction::triggered, [this]() {
-        if (writingPanel->editorMode() == WritingPanel::MarkdownMode) {
-            writingPanel->markdownEditor()->paste();
-        } else {
-            writingPanel->richTextEditor()->paste();
-        }
+        writingPanel->editor()->paste();
     });
     
     editMenu->addSeparator();
@@ -144,11 +119,7 @@ void MainWindow::setupEditMenu()
     QAction* selectAllAction = editMenu->addAction("Select &All");
     selectAllAction->setShortcut(QKeySequence::SelectAll);
     connect(selectAllAction, &QAction::triggered, [this]() {
-        if (writingPanel->editorMode() == WritingPanel::MarkdownMode) {
-            writingPanel->markdownEditor()->selectAll();
-        } else {
-            writingPanel->richTextEditor()->selectAll();
-        }
+        writingPanel->editor()->selectAll();
     });
     
     editMenu->addSeparator();
@@ -170,195 +141,129 @@ void MainWindow::setupEditMenu()
 
 void MainWindow::setupFormatMenu()
 {
-    formatMenu = menuBar()->addMenu("F&ormat");
+    QMenu* formatMenu = menuBar()->addMenu("F&ormat");
     
-    // Text formatting
+    // Markdown formatting helpers - insert syntax around selection
     QAction* boldAction = formatMenu->addAction("&Bold");
     boldAction->setShortcut(QKeySequence::Bold);
     connect(boldAction, &QAction::triggered, [this]() {
-        QTextCharFormat fmt;
-        fmt.setFontWeight(writingPanel->richTextEditor()->fontWeight() == QFont::Bold ? QFont::Normal : QFont::Bold);
-        writingPanel->richTextEditor()->mergeCurrentCharFormat(fmt);
+        QTextCursor cursor = writingPanel->editor()->textCursor();
+        if (cursor.hasSelection()) {
+            QString selected = cursor.selectedText();
+            cursor.insertText("**" + selected + "**");
+        } else {
+            cursor.insertText("****");
+            cursor.movePosition(QTextCursor::Left, QTextCursor::MoveAnchor, 2);
+            writingPanel->editor()->setTextCursor(cursor);
+        }
     });
     
     QAction* italicAction = formatMenu->addAction("&Italic");
     italicAction->setShortcut(QKeySequence::Italic);
     connect(italicAction, &QAction::triggered, [this]() {
-        QTextCharFormat fmt;
-        fmt.setFontItalic(!writingPanel->richTextEditor()->fontItalic());
-        writingPanel->richTextEditor()->mergeCurrentCharFormat(fmt);
-    });
-    
-    QAction* underlineAction = formatMenu->addAction("&Underline");
-    underlineAction->setShortcut(QKeySequence::Underline);
-    connect(underlineAction, &QAction::triggered, [this]() {
-        QTextCharFormat fmt;
-        fmt.setFontUnderline(!writingPanel->richTextEditor()->fontUnderline());
-        writingPanel->richTextEditor()->mergeCurrentCharFormat(fmt);
-    });
-    
-    QAction* strikethroughAction = formatMenu->addAction("&Strikethrough");
-    strikethroughAction->setShortcut(QKeySequence("Ctrl+Shift+X"));
-    connect(strikethroughAction, &QAction::triggered, [this]() {
-        QTextCharFormat fmt = writingPanel->richTextEditor()->currentCharFormat();
-        fmt.setFontStrikeOut(!fmt.fontStrikeOut());
-        writingPanel->richTextEditor()->mergeCurrentCharFormat(fmt);
-    });
-    
-    formatMenu->addSeparator();
-    
-    // Font family submenu
-    QMenu* fontMenu = formatMenu->addMenu("Font &Family");
-    QStringList fonts = {"Arial", "Times New Roman", "Courier New", "Georgia", "Verdana"};
-    for (const QString& font : fonts) {
-        QAction* fontAction = fontMenu->addAction(font);
-        connect(fontAction, &QAction::triggered, [this, font]() {
-            QTextCharFormat fmt;
-            fmt.setFontFamily(font);
-            writingPanel->richTextEditor()->mergeCurrentCharFormat(fmt);
-        });
-    }
-    
-    // Font size submenu
-    QMenu* sizeMenu = formatMenu->addMenu("Font &Size");
-    QList<int> sizes = {8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72};
-    for (int size : sizes) {
-        QAction* sizeAction = sizeMenu->addAction(QString::number(size));
-        connect(sizeAction, &QAction::triggered, [this, size]() {
-            QTextCharFormat fmt;
-            fmt.setFontPointSize(size);
-            writingPanel->richTextEditor()->mergeCurrentCharFormat(fmt);
-        });
-    }
-    
-    formatMenu->addSeparator();
-    
-    // Text color
-    QAction* textColorAction = formatMenu->addAction("Text &Color...");
-    connect(textColorAction, &QAction::triggered, [this]() {
-        QColor color = QColorDialog::getColor(writingPanel->richTextEditor()->textColor(), this, "Select Text Color");
-        if (color.isValid()) {
-            writingPanel->richTextEditor()->setTextColor(color);
+        QTextCursor cursor = writingPanel->editor()->textCursor();
+        if (cursor.hasSelection()) {
+            QString selected = cursor.selectedText();
+            cursor.insertText("*" + selected + "*");
+        } else {
+            cursor.insertText("**");
+            cursor.movePosition(QTextCursor::Left, QTextCursor::MoveAnchor, 1);
+            writingPanel->editor()->setTextCursor(cursor);
         }
     });
     
-    // Highlight color
-    QAction* highlightAction = formatMenu->addAction("&Highlight Color...");
-    connect(highlightAction, &QAction::triggered, [this]() {
-        QColor color = QColorDialog::getColor(Qt::yellow, this, "Select Highlight Color");
-        if (color.isValid()) {
-            QTextCharFormat fmt;
-            fmt.setBackground(color);
-            writingPanel->richTextEditor()->mergeCurrentCharFormat(fmt);
+    QAction* strikeAction = formatMenu->addAction("&Strikethrough");
+    strikeAction->setShortcut(QKeySequence("Ctrl+Shift+X"));
+    connect(strikeAction, &QAction::triggered, [this]() {
+        QTextCursor cursor = writingPanel->editor()->textCursor();
+        if (cursor.hasSelection()) {
+            QString selected = cursor.selectedText();
+            cursor.insertText("~~" + selected + "~~");
+        } else {
+            cursor.insertText("~~~~");
+            cursor.movePosition(QTextCursor::Left, QTextCursor::MoveAnchor, 2);
+            writingPanel->editor()->setTextCursor(cursor);
+        }
+    });
+    
+    QAction* codeAction = formatMenu->addAction("&Code");
+    codeAction->setShortcut(QKeySequence("Ctrl+`"));
+    connect(codeAction, &QAction::triggered, [this]() {
+        QTextCursor cursor = writingPanel->editor()->textCursor();
+        if (cursor.hasSelection()) {
+            QString selected = cursor.selectedText();
+            cursor.insertText("`" + selected + "`");
+        } else {
+            cursor.insertText("``");
+            cursor.movePosition(QTextCursor::Left, QTextCursor::MoveAnchor, 1);
+            writingPanel->editor()->setTextCursor(cursor);
         }
     });
     
     formatMenu->addSeparator();
     
-    // Alignment submenu
-    QMenu* alignMenu = formatMenu->addMenu("&Alignment");
-    
-    QAction* alignLeftAction = alignMenu->addAction("Align &Left");
-    alignLeftAction->setShortcut(QKeySequence("Ctrl+L"));
-    connect(alignLeftAction, &QAction::triggered, [this]() {
-        writingPanel->richTextEditor()->setAlignment(Qt::AlignLeft);
-    });
-    
-    QAction* alignCenterAction = alignMenu->addAction("Align &Center");
-    alignCenterAction->setShortcut(QKeySequence("Ctrl+E"));
-    connect(alignCenterAction, &QAction::triggered, [this]() {
-        writingPanel->richTextEditor()->setAlignment(Qt::AlignCenter);
-    });
-    
-    QAction* alignRightAction = alignMenu->addAction("Align &Right");
-    alignRightAction->setShortcut(QKeySequence("Ctrl+R"));
-    connect(alignRightAction, &QAction::triggered, [this]() {
-        writingPanel->richTextEditor()->setAlignment(Qt::AlignRight);
-    });
-    
-    QAction* alignJustifyAction = alignMenu->addAction("&Justify");
-    alignJustifyAction->setShortcut(QKeySequence("Ctrl+J"));
-    connect(alignJustifyAction, &QAction::triggered, [this]() {
-        writingPanel->richTextEditor()->setAlignment(Qt::AlignJustify);
-    });
+    // Headings
+    QMenu* headingMenu = formatMenu->addMenu("&Heading");
+    for (int level = 1; level <= 6; ++level) {
+        QAction* headingAction = headingMenu->addAction(QString("Heading %1").arg(level));
+        headingAction->setShortcut(QKeySequence(QString("Ctrl+Alt+%1").arg(level)));
+        connect(headingAction, &QAction::triggered, [this, level]() {
+            QTextCursor cursor = writingPanel->editor()->textCursor();
+            cursor.movePosition(QTextCursor::StartOfBlock);
+            QString prefix = QString("#").repeated(level) + " ";
+            cursor.insertText(prefix);
+        });
+    }
     
     formatMenu->addSeparator();
     
-    // Lists submenu
+    // Lists
     QMenu* listMenu = formatMenu->addMenu("&Lists");
     
-    QAction* bulletListAction = listMenu->addAction("&Bullet List");
-    bulletListAction->setShortcut(QKeySequence("Ctrl+Shift+B"));
-    connect(bulletListAction, &QAction::triggered, [this]() {
-        QTextCursor cursor = writingPanel->richTextEditor()->textCursor();
-        QTextListFormat listFormat;
-        listFormat.setStyle(QTextListFormat::ListDisc);
-        cursor.createList(listFormat);
+    QAction* bulletAction = listMenu->addAction("&Bullet Point");
+    bulletAction->setShortcut(QKeySequence("Ctrl+Shift+B"));
+    connect(bulletAction, &QAction::triggered, [this]() {
+        QTextCursor cursor = writingPanel->editor()->textCursor();
+        cursor.movePosition(QTextCursor::StartOfBlock);
+        cursor.insertText("- ");
     });
     
-    QAction* numberedListAction = listMenu->addAction("&Numbered List");
-    numberedListAction->setShortcut(QKeySequence("Ctrl+Shift+N"));
-    connect(numberedListAction, &QAction::triggered, [this]() {
-        QTextCursor cursor = writingPanel->richTextEditor()->textCursor();
-        QTextListFormat listFormat;
-        listFormat.setStyle(QTextListFormat::ListDecimal);
-        cursor.createList(listFormat);
+    QAction* numberAction = listMenu->addAction("&Numbered Point");
+    numberAction->setShortcut(QKeySequence("Ctrl+Shift+N"));
+    connect(numberAction, &QAction::triggered, [this]() {
+        QTextCursor cursor = writingPanel->editor()->textCursor();
+        cursor.movePosition(QTextCursor::StartOfBlock);
+        cursor.insertText("1. ");
     });
     
     formatMenu->addSeparator();
     
-    // Indent
-    QAction* increaseIndentAction = formatMenu->addAction("&Increase Indent");
-    increaseIndentAction->setShortcut(QKeySequence("Ctrl+]"));
-    connect(increaseIndentAction, &QAction::triggered, [this]() {
-        QTextCursor cursor = writingPanel->richTextEditor()->textCursor();
-        QTextBlockFormat fmt = cursor.blockFormat();
-        fmt.setIndent(fmt.indent() + 1);
-        cursor.setBlockFormat(fmt);
+    // Block elements
+    QAction* quoteAction = formatMenu->addAction("&Blockquote");
+    quoteAction->setShortcut(QKeySequence("Ctrl+>"));
+    connect(quoteAction, &QAction::triggered, [this]() {
+        QTextCursor cursor = writingPanel->editor()->textCursor();
+        cursor.movePosition(QTextCursor::StartOfBlock);
+        cursor.insertText("> ");
     });
     
-    QAction* decreaseIndentAction = formatMenu->addAction("&Decrease Indent");
-    decreaseIndentAction->setShortcut(QKeySequence("Ctrl+["));
-    connect(decreaseIndentAction, &QAction::triggered, [this]() {
-        QTextCursor cursor = writingPanel->richTextEditor()->textCursor();
-        QTextBlockFormat fmt = cursor.blockFormat();
-        if (fmt.indent() > 0) {
-            fmt.setIndent(fmt.indent() - 1);
-            cursor.setBlockFormat(fmt);
-        }
-    });
-}
-
-void MainWindow::setupViewMenu()
-{
-    QMenu* viewMenu = menuBar()->addMenu("&View");
-    
-    QAction* toggleModeAction = viewMenu->addAction("Toggle &Markdown/Rich Text Mode");
-    toggleModeAction->setShortcut(QKeySequence("Ctrl+M"));
-    toggleModeAction->setCheckable(true);
-    toggleModeAction->setChecked(false); // Start in Markdown mode
-    
-    connect(toggleModeAction, &QAction::triggered, [this, toggleModeAction]() {
-        if (toggleModeAction->isChecked()) {
-            writingPanel->setEditorMode(WritingPanel::RichTextMode);
-        } else {
-            writingPanel->setEditorMode(WritingPanel::MarkdownMode);
-        }
+    QAction* codeBlockAction = formatMenu->addAction("Code &Block");
+    codeBlockAction->setShortcut(QKeySequence("Ctrl+Shift+`"));
+    connect(codeBlockAction, &QAction::triggered, [this]() {
+        QTextCursor cursor = writingPanel->editor()->textCursor();
+        cursor.insertText("```\n\n```");
+        cursor.movePosition(QTextCursor::Up);
     });
     
-    // Update checkbox when mode changes programmatically
-    connect(writingPanel, &WritingPanel::modeChanged, [this, toggleModeAction](WritingPanel::EditorMode mode) {
-        toggleModeAction->setChecked(mode == WritingPanel::RichTextMode);
-        updateMenuStates();
+    QAction* horizontalAction = formatMenu->addAction("&Horizontal Rule");
+    connect(horizontalAction, &QAction::triggered, [this]() {
+        QTextCursor cursor = writingPanel->editor()->textCursor();
+        cursor.movePosition(QTextCursor::StartOfBlock);
+        cursor.insertText("---");
     });
 }
 
-void MainWindow::updateMenuStates()
-{
-    // Disable Format menu in Markdown mode
-    bool richTextMode = (writingPanel->editorMode() == WritingPanel::RichTextMode);
-    formatMenu->setEnabled(richTextMode);
-}
+
 
 void MainWindow::connectSignals()
 {
@@ -371,9 +276,6 @@ void MainWindow::connectSignals()
         structurePanel->updateWordCount(writingPanel->wordCount());
         saveCurrentChapter();
     });
-    
-    // Initial menu state
-    updateMenuStates();
 }
 
 void MainWindow::onStructureItemSelected(const QString& id)
@@ -393,7 +295,7 @@ void MainWindow::onStructureItemSelected(const QString& id)
     // Load chapter content (stored as Markdown)
     Chapter* chapter = chapters[id];
     writingPanel->setTitle(chapter->title());
-    writingPanel->setContentMarkdown(chapter->content());
+    writingPanel->setContent(chapter->content());
 }
 
 void MainWindow::saveCurrentChapter()
@@ -403,7 +305,7 @@ void MainWindow::saveCurrentChapter()
     }
     
     Chapter* chapter = chapters[currentChapterId];
-    chapter->setContent(writingPanel->getContentMarkdown());
+    chapter->setContent(writingPanel->getContent());
 }
 
 Chapter* MainWindow::getCurrentChapter()
@@ -431,14 +333,14 @@ void MainWindow::onImportMarkdown()
     QString markdown = in.readAll();
     file.close();
     
-    writingPanel->setContentMarkdown(markdown);
+    writingPanel->setContent(markdown);
     
     QMessageBox::information(this, "Import Complete", "Markdown file imported successfully.");
 }
 
 void MainWindow::onExportMarkdown()
 {
-    QString markdown = writingPanel->getContentMarkdown();
+    QString markdown = writingPanel->getContent();
     if (markdown.isEmpty()) {
         QMessageBox::warning(this, "Export Error", "No content to export.");
         return;

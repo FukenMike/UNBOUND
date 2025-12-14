@@ -12,7 +12,6 @@ set(SOURCES
     RevisionPanel.cpp
     model/Project.cpp
     model/Chapter.cpp
-    core/MarkdownConverter.cpp
 )
 
 set(HEADERS
@@ -26,7 +25,6 @@ set(HEADERS
     RevisionPanel.hpp
     model/Project.hpp
     model/Chapter.hpp
-    core/MarkdownConverter.hpp
 )
 
 add_executable(unbound ${SOURCES} ${HEADERS})
