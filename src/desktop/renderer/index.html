@@ -38,7 +38,7 @@
 
     <div id="view-menu" class="dropdown-menu" style="display:none;">
       <label class="menu-item checkbox-item">
-        <input type="checkbox" id="toggle-structure" checked />
+        <input type="checkbox" id="toggle-structure" />
         Structure
       </label>
       <label class="menu-item checkbox-item">
@@ -64,6 +64,7 @@
       <button class="menu-item" data-action="word-analysis">Word Analysis</button>
       <hr />
       <button class="menu-item" data-action="settings">Settings</button>
+      <button class="menu-item" data-action="reset-ui">Reset UI State</button>
     </div>
 
     <!-- Left Sidebar: Dockable Panels -->
@@ -134,7 +135,7 @@
     <!-- Right Sidebar: Dockable Tool Panels -->
     <aside id="sidebar-right" class="sidebar sidebar-right">
       <!-- Layout Domain Panel -->
-      <div id="panel-layout" class="domain-panel panel-layout" data-domain="layout" style="display:none;">
+      <div id="panel-layout" class="domain-panel panel-layout" data-domain="layout">
         <div class="panel-header">
           <h2 class="panel-title">Layout</h2>
           <button class="panel-close-btn" data-panel="panel-layout" title="Close">×</button>

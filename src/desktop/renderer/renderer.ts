@@ -48,8 +48,8 @@ interface PanelState {
 }
 
 let panelState: PanelState = {
-  structure: true,
-  layout: false,
+  structure: false,
+  layout: true,
   planning: false,
   analysis: false,
   revision: false
@@ -70,15 +70,66 @@ let layoutState = {
   pageTone: localStorage.getItem('editor-page-tone') || 'dark'
 };
 
+/**
+ * Enforce Layout as the starting domain unless user has explicitly set preferences.
+ * If there is no persisted panel state marker, set Layout visible and Structure hidden,
+ * update the DOM and save the preference for subsequent sessions.
+ */
+function enforceLayoutAsStart() {
+  const marker = localStorage.getItem('panel-state-initialized');
+  const hasProject = !!currentProject;
+  if (!marker && !hasProject) {
+    panelState.layout = true;
+    panelState.structure = false;
+    // Reflect in checkboxes if present
+    const toggleStructure = document.getElementById('toggle-structure') as HTMLInputElement | null;
+    const toggleLayout = document.getElementById('toggle-layout') as HTMLInputElement | null;
+    if (toggleStructure) toggleStructure.checked = false;
+    if (toggleLayout) toggleLayout.checked = true;
+    // Apply panel visibility immediately
+    const structurePanel = document.getElementById('panel-structure') as HTMLElement | null;
+    const layoutPanel = document.getElementById('panel-layout') as HTMLElement | null;
+    if (structurePanel) structurePanel.style.display = 'none';
+    if (layoutPanel) layoutPanel.style.display = 'block';
+    localStorage.setItem('panel-state-initialized', 'true');
+    localStorage.setItem('panel-structure-visible', 'false');
+    localStorage.setItem('panel-layout-visible', 'true');
+  }
+}
+
+/**
+ * Hard override to guarantee Layout is shown on launch, independent of stale persisted state.
+ * This is a safety net while we debug UI visibility issues.
+ */
+function forceLayoutFirst() {
+  panelState.structure = false;
+  panelState.layout = true;
+  localStorage.setItem('panel-structure-visible', 'false');
+  localStorage.setItem('panel-layout-visible', 'true');
+  const structurePanel = document.getElementById('panel-structure') as HTMLElement | null;
+  const layoutPanel = document.getElementById('panel-layout') as HTMLElement | null;
+  if (structurePanel) structurePanel.style.display = 'none';
+  if (layoutPanel) layoutPanel.style.display = 'flex';
+  updateMenuCheckboxes();
+}
+
 // ==============================================================================
 // INITIALIZATION
 // ==============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
   console.log('UNBOUND renderer initialized - multi-domain architecture');
+  // Hard cache clear for panel/layout state to avoid stale UI
+  clearUIStateCache();
   
   // Restore panel state from localStorage
   restorePanelState();
+
+  // Hard override: ensure Layout is visible and Structure hidden on launch to avoid stale localStorage blocking UI
+  forceLayoutFirst();
+
+  // Ensure Layout is the starting point on first launch or when no project
+  enforceLayoutAsStart();
   
   // Initialize subsystems
   initMenuBar();
@@ -89,9 +140,43 @@ document.addEventListener('DOMContentLoaded', () => {
   initWritingDomain();
   initLayoutDomain();
   initAnalysisDomain();
+
+  // Nudge UI: ensure Layout details are expanded and visible on start
+  const layoutPanel = document.getElementById('panel-layout');
+  if (layoutPanel && layoutPanel.style.display !== 'none') {
+    const front = document.getElementById('layout-frontmatter') as HTMLDetailsElement | null;
+    const body = document.getElementById('layout-body') as HTMLDetailsElement | null;
+    const back = document.getElementById('layout-backmatter') as HTMLDetailsElement | null;
+    const visual = document.getElementById('layout-visual') as HTMLDetailsElement | null;
+    [front, body, back, visual].forEach(sec => { if (sec) sec.open = true; });
+    layoutPanel.scrollIntoView({ block: 'start' });
+  }
   
   console.log('UNBOUND: All domains initialized');
 });
+
+/**
+ * Remove persisted UI keys so stale cache cannot hide Layout. One-time safety.
+ */
+function clearUIStateCache() {
+  const keys = [
+    'panel-state-initialized',
+    'panel-structure-visible',
+    'panel-layout-visible',
+    'panel-planning-visible',
+    'panel-analysis-visible',
+    'panel-revision-visible',
+    'sidebar-left-width',
+    'sidebar-right-width',
+    'editor-wrap-width',
+    'editor-line-height',
+    'editor-char-spacing',
+    'editor-paragraph-spacing',
+    'editor-page-tone',
+    'hidden-items-map'
+  ];
+  keys.forEach(k => localStorage.removeItem(k));
+}
 
 // ==============================================================================
 // MENU BAR & COMMAND ACCESS LAYER
@@ -149,6 +234,10 @@ function initDropdownMenus() {
   document.querySelector('[data-action="export-markdown"]')?.addEventListener('click', () => {
     exportAsMarkdown();
   });
+  // Tools menu actions
+  document.querySelector('[data-action="reset-ui"]')?.addEventListener('click', () => {
+    resetUIState();
+  });
   
   // Project menu actions
   document.querySelector('[data-action="add-chapter"]')?.addEventListener('click', () => {
@@ -181,6 +270,36 @@ function initDropdownMenus() {
   toggleRevision?.addEventListener('change', () => {
     togglePanelVisibility('revision', toggleRevision.checked);
   });
+}
+
+/**
+ * Clear persisted UI state (panel visibility, sizes, layout prefs) and re-enforce
+ * Layout-first behavior immediately.
+ */
+function resetUIState() {
+  const keys = [
+    'panel-state-initialized',
+    'panel-structure-visible',
+    'panel-layout-visible',
+    'panel-planning-visible',
+    'panel-analysis-visible',
+    'panel-revision-visible',
+    'sidebar-left-width',
+    'sidebar-right-width',
+    'editor-wrap-width',
+    'editor-line-height',
+    'editor-char-spacing',
+    'editor-paragraph-spacing',
+    'editor-page-tone',
+    'hidden-items-map'
+  ];
+  keys.forEach(k => localStorage.removeItem(k));
+  // Reapply Layout-first and update DOM
+  panelState = { structure: false, layout: true, planning: false, analysis: false, revision: false };
+  enforceLayoutAsStart();
+  togglePanelVisibility('structure', panelState.structure);
+  togglePanelVisibility('layout', panelState.layout);
+  console.log('UI state reset. Layout is now the starting panel.');
 }
 
 /**
