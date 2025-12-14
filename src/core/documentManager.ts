@@ -133,7 +133,7 @@ export class DocumentManager {
       
       // Detect headings (lines starting with # or short lines followed by content)
       if (trimmed.startsWith('#')) {
-        const level = trimmed.match(/^#+/)?.[0].length || 1;
+        const level = trimmed.match(/^#+/)?.[0].length ?? 1;
         const content = trimmed.replace(/^#+\s*/, '');
         return {
           id: uuidv4(),
@@ -165,7 +165,7 @@ export class DocumentManager {
    */
   private contentToText(content: ContentNode[]): string {
     return content.map(node => {
-      if (node.type === ContentType.HEADING && node.metadata.level) {
+      if (node.type === ContentType.HEADING && typeof node.metadata.level === 'number') {
         const hashes = '#'.repeat(node.metadata.level);
         return `${hashes} ${node.content}`;
       }
