@@ -8,41 +8,105 @@
 </head>
 <body>
   <div id="app" class="app">
-    <!-- Left: Structure/Navigation Panel -->
-    <aside id="structure-panel" class="panel panel-structure">
-      <div class="panel-header">
-        <h2 class="panel-title">Structure</h2>
-        <div class="structure-actions">
-          <button id="load-project-btn" class="load-btn" title="Load Project">Open</button>
-          <button id="add-chapter-btn" class="add-btn" title="Add Chapter">+</button>
-        </div>
+    <!-- Menu Bar: Domain-level access and commands -->
+    <nav id="menu-bar" class="menu-bar">
+      <button class="menu-btn" data-menu="file" title="File operations">File</button>
+      <button class="menu-btn" data-menu="project" title="Project and structure">Project</button>
+      <button class="menu-btn" data-menu="view" title="View panels and layout">View</button>
+      <button class="menu-btn" data-menu="tools" title="Analysis and utilities">Tools</button>
+      <div class="project-info">
+        <span id="project-title" class="project-title">No project</span>
+        <span id="project-stats" class="project-stats">—</span>
       </div>
-      <div class="panel-content">
-        <div id="structure-tree" class="structure-tree">
-          <div class="empty-state">No project loaded</div>
+    </nav>
+
+    <!-- Dropdown Menus (hidden by default) -->
+    <div id="file-menu" class="dropdown-menu" style="display:none;">
+      <button class="menu-item" data-action="load-project">Load Project</button>
+      <button class="menu-item" data-action="ingest-text">Import Text</button>
+      <hr />
+      <button class="menu-item" data-action="export-json">Export as JSON</button>
+      <button class="menu-item" data-action="export-markdown">Export as Markdown</button>
+    </div>
+
+    <div id="project-menu" class="dropdown-menu" style="display:none;">
+      <button class="menu-item" data-action="add-section">Add Section</button>
+      <button class="menu-item" data-action="add-chapter">Add Item</button>
+      <hr />
+      <button class="menu-item" data-action="view-structure">Structure Panel</button>
+    </div>
+
+    <div id="view-menu" class="dropdown-menu" style="display:none;">
+      <label class="menu-item checkbox-item">
+        <input type="checkbox" id="toggle-structure" checked />
+        Structure
+      </label>
+      <label class="menu-item checkbox-item">
+        <input type="checkbox" id="toggle-layout" checked />
+        Layout
+      </label>
+      <label class="menu-item checkbox-item">
+        <input type="checkbox" id="toggle-planning" />
+        Planning
+      </label>
+      <label class="menu-item checkbox-item">
+        <input type="checkbox" id="toggle-analysis" />
+        Analysis
+      </label>
+      <label class="menu-item checkbox-item">
+        <input type="checkbox" id="toggle-revision" />
+        Revision
+      </label>
+    </div>
+
+    <div id="tools-menu" class="dropdown-menu" style="display:none;">
+      <button class="menu-item" data-action="text-search">Search in Document</button>
+      <button class="menu-item" data-action="word-analysis">Word Analysis</button>
+      <hr />
+      <button class="menu-item" data-action="settings">Settings</button>
+    </div>
+
+    <!-- Left Sidebar: Dockable Panels -->
+    <aside id="sidebar-left" class="sidebar sidebar-left">
+      <!-- Structure Domain Panel -->
+      <div id="panel-structure" class="domain-panel panel-structure" data-domain="structure">
+        <div class="panel-header">
+          <h2 class="panel-title">Structure</h2>
+          <button class="panel-close-btn" data-panel="panel-structure" title="Close">×</button>
         </div>
-      </div>
-      <div class="panel-footer">
-        <div id="word-count">0 words</div>
+        <div class="panel-content">
+          <div id="structure-tree" class="structure-tree">
+            <div class="empty-state">No project loaded</div>
+          </div>
+        </div>
+        <div class="panel-footer">
+          <small id="structure-meta">—</small>
+        </div>
       </div>
     </aside>
 
-    <!-- Resizer for left panel -->
-    <div class="resizer resizer-left" data-panel="structure-panel"></div>
+    <!-- Resizer for left sidebar -->
+    <div class="resizer resizer-left"></div>
 
-    <!-- Center: Work Canvas -->
+    <!-- Center: Writing Surface (calm, minimal) -->
     <main id="canvas" class="panel panel-canvas">
       <div class="panel-content">
-        <!-- Wrap width control (subtle, minimal) -->
-        <div id="wrap-control" class="wrap-control" style="display: none;">
-          <label class="wrap-label">Wrap:</label>
-          <button class="wrap-preset" data-width="600">Narrow</button>
-          <button class="wrap-preset" data-width="800">Medium</button>
-          <button class="wrap-preset active" data-width="1000">Wide</button>
-          <button class="wrap-preset" data-width="0">Full</button>
+        <!-- Layout Domain: Wrap width controls (optional, dockable, or accessed via Tools) -->
+        <div id="layout-toolbar" class="layout-toolbar" style="display: none;">
+          <label class="layout-control">
+            <span class="layout-label">Width:</span>
+            <button class="layout-preset" data-width="600" title="Narrow">N</button>
+            <button class="layout-preset" data-width="800" title="Medium">M</button>
+            <button class="layout-preset active" data-width="1000" title="Wide">W</button>
+            <button class="layout-preset" data-width="0" title="Full">F</button>
+          </label>
+          <label class="layout-control">
+            <span class="layout-label">Line Height:</span>
+            <input type="range" id="line-height-slider" min="1.2" max="2.5" step="0.1" value="1.8" />
+          </label>
         </div>
-        
-        <!-- Writing surface -->
+
+        <!-- Writing Surface: Clean, distraction-free editor -->
         <div id="editor-container" class="editor-container">
           <div id="editor-header" class="editor-header" style="display:none;">
             <div class="editor-number" id="editor-number"></div>
@@ -51,43 +115,105 @@
           <textarea 
             id="editor" 
             class="editor" 
-            placeholder="Select a chapter to begin writing..."
+            placeholder="Select an item to begin writing..."
             spellcheck="true"
           ></textarea>
         </div>
-        
-        <!-- Empty state (shown when no chapter selected) -->
+
+        <!-- Empty state: Neutral, no workflow assumptions -->
         <div id="editor-empty" class="canvas-placeholder">
           <div class="placeholder-icon">✦</div>
-          <p class="placeholder-text">Select a chapter to begin</p>
+          <p class="placeholder-text">Select an item to edit</p>
         </div>
       </div>
     </main>
 
-    <!-- Resizer for right panel -->
-    <div class="resizer resizer-right" data-panel="tools-panel"></div>
+    <!-- Resizer for right sidebar -->
+    <div class="resizer resizer-right"></div>
 
-    <!-- Right: Tools/Awareness Dock -->
-    <aside id="tools-panel" class="panel panel-tools">
-      <div class="panel-header">
-        <h2 class="panel-title">Tools</h2>
-        <button class="collapse-btn" data-panel="tools-panel" title="Collapse">−</button>
-      </div>
-      <div class="panel-content">
-        <div class="tools-rail">
-          <button class="tool-btn" data-action="search" title="Search">🔎</button>
-          <button class="tool-btn" data-action="wrap" title="Wrap Width">⤢</button>
-          <button class="tool-btn" data-action="stats" title="Stats">Σ</button>
-          <button class="tool-btn" data-action="export" title="Export">⤓</button>
+    <!-- Right Sidebar: Dockable Tool Panels -->
+    <aside id="sidebar-right" class="sidebar sidebar-right">
+      <!-- Layout Domain Panel -->
+      <div id="panel-layout" class="domain-panel panel-layout" data-domain="layout" style="display:none;">
+        <div class="panel-header">
+          <h2 class="panel-title">Layout</h2>
+          <button class="panel-close-btn" data-panel="panel-layout" title="Close">×</button>
         </div>
-        <div class="tools-area">
-          <div id="tools-content">
-            <div id="search-panel" class="search-panel" style="display:none;">
-              <input id="search-input" class="search-input" placeholder="Find in chapter"/>
-              <button id="search-prev" class="search-btn">Prev</button>
-              <button id="search-next" class="search-btn">Next</button>
-              <span id="search-status" class="search-status"></span>
+        <div class="panel-content">
+          <div class="layout-controls">
+            <label class="control-group">
+              <span class="control-label">Line Width</span>
+              <div class="button-group">
+                <button class="layout-preset" data-width="600">Narrow</button>
+                <button class="layout-preset" data-width="800">Medium</button>
+                <button class="layout-preset active" data-width="1000">Wide</button>
+                <button class="layout-preset" data-width="0">Full</button>
+              </div>
+            </label>
+            <label class="control-group">
+              <span class="control-label">Line Height</span>
+              <input type="range" id="line-height-slider-panel" min="1.2" max="2.5" step="0.1" value="1.8" />
+              <span id="line-height-display" class="control-value">1.8</span>
+            </label>
+            <label class="control-group">
+              <span class="control-label">Char Spacing</span>
+              <input type="range" id="char-spacing-slider" min="-0.05" max="0.1" step="0.01" value="0" />
+              <span id="char-spacing-display" class="control-value">0</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Planning Domain Panel -->
+      <div id="panel-planning" class="domain-panel panel-planning" data-domain="planning" style="display:none;">
+        <div class="panel-header">
+          <h2 class="panel-title">Planning</h2>
+          <button class="panel-close-btn" data-panel="panel-planning" title="Close">×</button>
+        </div>
+        <div class="panel-content">
+          <div id="planning-content" class="planning-content">
+            <div class="empty-state">No planning content yet</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Analysis Domain Panel -->
+      <div id="panel-analysis" class="domain-panel panel-analysis" data-domain="analysis" style="display:none;">
+        <div class="panel-header">
+          <h2 class="panel-title">Analysis</h2>
+          <button class="panel-close-btn" data-panel="panel-analysis" title="Close">×</button>
+        </div>
+        <div class="panel-content">
+          <div id="analysis-content" class="analysis-content">
+            <div class="stat-item">
+              <span class="stat-label">Words</span>
+              <span id="stat-words" class="stat-value">0</span>
             </div>
+            <div class="stat-item">
+              <span class="stat-label">Characters</span>
+              <span id="stat-chars" class="stat-value">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Paragraphs</span>
+              <span id="stat-paragraphs" class="stat-value">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Avg Line</span>
+              <span id="stat-avg-line" class="stat-value">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Revision Domain Panel -->
+      <div id="panel-revision" class="domain-panel panel-revision" data-domain="revision" style="display:none;">
+        <div class="panel-header">
+          <h2 class="panel-title">Revision</h2>
+          <button class="panel-close-btn" data-panel="panel-revision" title="Close">×</button>
+        </div>
+        <div class="panel-content">
+          <div id="revision-content" class="revision-content">
+            <div class="empty-state">No revisions loaded</div>
           </div>
         </div>
       </div>

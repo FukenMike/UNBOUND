@@ -1,6 +1,24 @@
 /**
- * UNBOUND Desktop Renderer Process
- * Handles UI interactions, panel resizing, and project structure rendering.
+ * UNBOUND Desktop Renderer Process - Multi-Domain Architecture
+ * 
+ * This renderer implements a domain-aware, panel-based writing environment where
+ * all major writing-related domains coexist without overwhelming the user:
+ * 
+ * DOMAINS:
+ * 1. Structure: Left sidebar - always visible, document organization
+ * 2. Writing: Center canvas - clean text editing, distraction-free
+ * 3. Layout: Right sidebar - non-destructive visual controls (line width, spacing)
+ * 4. Planning: Right sidebar - optional outlines and organizational tools
+ * 5. Analysis: Right sidebar - read-only statistics and metrics
+ * 6. Revision: Right sidebar - version comparison and change tracking
+ * 7. Ingest: Menu-accessed - text import and normalization
+ * 
+ * Architecture:
+ * - Menu bar provides top-level access to all domains
+ * - Panels are dockable, resizable, and persist state across sessions
+ * - No workflow assumptions; users move fluidly between domains
+ * - Center canvas remains calm and uncluttered
+ * - All functionality is organized by domain responsibility
  */
 
 // Type definitions for Electron API
@@ -12,35 +30,241 @@ interface WindowWithElectron extends Window {
   electronAPI: ElectronAPI;
 }
 
-// Proof of life: log immediately when module loads
-console.log('UNBOUND renderer loaded');
+// ==============================================================================
+// STATE MANAGEMENT
+// ==============================================================================
 
 let currentProject: any = null;
 let currentChapter: any = null;
 let currentChapterElement: HTMLElement | null = null;
 
-let panelSizes = {
-  structure: parseInt(localStorage.getItem('panel-structure-width') || '280'),
-  tools: parseInt(localStorage.getItem('panel-tools-width') || '320')
+// Panel state: which panels are visible
+interface PanelState {
+  structure: boolean;
+  layout: boolean;
+  planning: boolean;
+  analysis: boolean;
+  revision: boolean;
+}
+
+let panelState: PanelState = {
+  structure: true,
+  layout: false,
+  planning: false,
+  analysis: false,
+  revision: false
 };
 
-let wrapWidth = parseInt(localStorage.getItem('editor-wrap-width') || '1000');
+// Panel sizes persist via localStorage
+let panelSizes = {
+  left: parseInt(localStorage.getItem('sidebar-left-width') || '320'),
+  right: parseInt(localStorage.getItem('sidebar-right-width') || '320')
+};
 
-// Initialize app
+// Layout controls state
+let layoutState = {
+  wrapWidth: parseInt(localStorage.getItem('editor-wrap-width') || '1000'),
+  lineHeight: parseFloat(localStorage.getItem('editor-line-height') || '1.8'),
+  charSpacing: parseFloat(localStorage.getItem('editor-char-spacing') || '0')
+};
+
+// ==============================================================================
+// INITIALIZATION
+// ==============================================================================
+
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOMContentLoaded fired - initializing UI');
+  console.log('UNBOUND renderer initialized - multi-domain architecture');
+  
+  // Restore panel state from localStorage
+  restorePanelState();
+  
+  // Initialize subsystems
+  initMenuBar();
+  initDropdownMenus();
+  initPanelControls();
   initPanelResizing();
-  initCollapseButtons();
-  initLoadButton();
-  initPlannerActions();
-  initEditor();
-  initToolsRail();
-  restorePanelSizes();
-  restoreWrapWidth();
-  console.log('UNBOUND initialization complete');
+  initStructureDomain();
+  initWritingDomain();
+  initLayoutDomain();
+  initAnalysisDomain();
+  
+  console.log('UNBOUND: All domains initialized');
 });
 
-// Panel resizing
+// ==============================================================================
+// MENU BAR & COMMAND ACCESS LAYER
+// ==============================================================================
+
+/**
+ * Initialize menu bar buttons to show/hide dropdown menus
+ */
+function initMenuBar() {
+  const menuButtons = document.querySelectorAll('.menu-btn');
+  
+  menuButtons.forEach(btn => {
+    btn.addEventListener('click', (e: Event) => {
+      e.stopPropagation();
+      const menuName = (btn as HTMLElement).dataset.menu;
+      const menuEl = document.getElementById(`${menuName}-menu`);
+      
+      // Hide other menus
+      document.querySelectorAll('.dropdown-menu').forEach(m => {
+        if (m !== menuEl) (m as HTMLElement).style.display = 'none';
+      });
+      
+      // Toggle this menu
+      if (menuEl) {
+        menuEl.style.display = menuEl.style.display === 'none' ? 'block' : 'none';
+      }
+    });
+  });
+  
+  // Close menus when clicking outside
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.dropdown-menu').forEach(m => {
+      (m as HTMLElement).style.display = 'none';
+    });
+  });
+}
+
+/**
+ * Initialize dropdown menu items and their actions
+ */
+function initDropdownMenus() {
+  // File menu actions
+  document.querySelector('[data-action="load-project"]')?.addEventListener('click', () => {
+    loadProject();
+  });
+  
+  document.querySelector('[data-action="ingest-text"]')?.addEventListener('click', () => {
+    console.log('Ingest text: File import dialog (not yet implemented)');
+  });
+  
+  document.querySelector('[data-action="export-json"]')?.addEventListener('click', () => {
+    exportAsJSON();
+  });
+  
+  document.querySelector('[data-action="export-markdown"]')?.addEventListener('click', () => {
+    exportAsMarkdown();
+  });
+  
+  // Project menu actions
+  document.querySelector('[data-action="add-chapter"]')?.addEventListener('click', () => {
+    addChapter();
+  });
+  
+  // View menu: Panel toggles
+  const toggleStructure = document.getElementById('toggle-structure') as HTMLInputElement;
+  const toggleLayout = document.getElementById('toggle-layout') as HTMLInputElement;
+  const togglePlanning = document.getElementById('toggle-planning') as HTMLInputElement;
+  const toggleAnalysis = document.getElementById('toggle-analysis') as HTMLInputElement;
+  const toggleRevision = document.getElementById('toggle-revision') as HTMLInputElement;
+  
+  toggleStructure?.addEventListener('change', () => {
+    togglePanelVisibility('structure', toggleStructure.checked);
+  });
+  
+  toggleLayout?.addEventListener('change', () => {
+    togglePanelVisibility('layout', toggleLayout.checked);
+  });
+  
+  togglePlanning?.addEventListener('change', () => {
+    togglePanelVisibility('planning', togglePlanning.checked);
+  });
+  
+  toggleAnalysis?.addEventListener('change', () => {
+    togglePanelVisibility('analysis', toggleAnalysis.checked);
+  });
+  
+  toggleRevision?.addEventListener('change', () => {
+    togglePanelVisibility('revision', toggleRevision.checked);
+  });
+}
+
+/**
+ * Toggle domain panel visibility and persist state
+ */
+function togglePanelVisibility(domain: string, visible: boolean) {
+  (panelState as any)[domain] = visible;
+  localStorage.setItem(`panel-${domain}-visible`, visible.toString());
+  
+  const panelEl = document.getElementById(`panel-${domain}`);
+  if (panelEl) {
+    panelEl.style.display = visible ? 'flex' : 'none';
+  }
+  
+  updateMenuCheckboxes();
+}
+
+/**
+ * Restore panel visibility state from localStorage
+ */
+function restorePanelState() {
+  Object.keys(panelState).forEach((domain: string) => {
+    const visible = localStorage.getItem(`panel-${domain}-visible`) !== 'false';
+    (panelState as any)[domain] = visible;
+    
+    // Apply to DOM
+    const panelEl = document.getElementById(`panel-${domain}`);
+    if (panelEl) {
+      panelEl.style.display = visible ? 'flex' : 'none';
+    }
+  });
+  
+  updateMenuCheckboxes();
+}
+
+/**
+ * Update menu checkboxes to reflect current panel state
+ */
+function updateMenuCheckboxes() {
+  const checkboxes: Record<string, string> = {
+    structure: '#toggle-structure',
+    layout: '#toggle-layout',
+    planning: '#toggle-planning',
+    analysis: '#toggle-analysis',
+    revision: '#toggle-revision'
+  };
+  
+  Object.keys(panelState).forEach((domain: string) => {
+    const checkbox = document.querySelector(checkboxes[domain]) as HTMLInputElement;
+    if (checkbox) {
+      checkbox.checked = (panelState as any)[domain];
+    }
+  });
+}
+
+// ==============================================================================
+// PANEL MANAGEMENT
+// ==============================================================================
+
+/**
+ * Initialize close buttons on domain panels
+ */
+function initPanelControls() {
+  document.querySelectorAll('.panel-close-btn').forEach(btn => {
+    btn.addEventListener('click', (e: Event) => {
+      e.stopPropagation();
+      const panelId = (btn as HTMLElement).dataset.panel;
+      const panelEl = document.getElementById(panelId!);
+      if (panelEl) {
+        panelEl.style.display = 'none';
+        
+        // Update panel state
+        const domain = panelEl.dataset.domain;
+        if (domain) {
+          (panelState as any)[domain] = false;
+          localStorage.setItem(`panel-${domain}-visible`, 'false');
+          updateMenuCheckboxes();
+        }
+      }
+    });
+  });
+}
+
+/**
+ * Initialize resizable sidebars
+ */
 function initPanelResizing() {
   const resizers = document.querySelectorAll('.resizer');
   
@@ -48,177 +272,758 @@ function initPanelResizing() {
     let isResizing = false;
     let startX = 0;
     let startWidth = 0;
-    let panel: HTMLElement | null = null;
+    let sidebar: HTMLElement | null = null;
     
     resizer.addEventListener('mousedown', (e: Event) => {
       const mouseEvent = e as MouseEvent;
       isResizing = true;
       startX = mouseEvent.clientX;
       
-      const panelId = resizer.getAttribute('data-panel');
-      panel = document.getElementById(panelId!);
-      startWidth = panel!.offsetWidth;
+      // Determine which sidebar to resize
+      const isLeftResizer = resizer.classList.contains('resizer-left');
+      sidebar = isLeftResizer ? document.getElementById('sidebar-left') : document.getElementById('sidebar-right');
       
-      resizer.classList.add('resizing');
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
+      if (sidebar) {
+        startWidth = sidebar.offsetWidth;
+        (resizer as HTMLElement).classList.add('resizing');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+      }
     });
     
     document.addEventListener('mousemove', (e: Event) => {
-      if (!isResizing || !panel) return;
-      const mouseEvent = e as MouseEvent;
+      if (!isResizing || !sidebar) return;
       
-      const isLeftPanel = resizer.classList.contains('resizer-left');
-      const delta = isLeftPanel ? (mouseEvent.clientX - startX) : (startX - mouseEvent.clientX);
+      const mouseEvent = e as MouseEvent;
+      const isLeftResizer = resizer.classList.contains('resizer-left');
+      const delta = isLeftResizer ? (mouseEvent.clientX - startX) : (startX - mouseEvent.clientX);
       const newWidth = Math.max(200, Math.min(600, startWidth + delta));
       
-      panel.style.width = `${newWidth}px`;
-      
-      // Save to state
-      if (panel.id === 'structure-panel') {
-        panelSizes.structure = newWidth;
-      } else if (panel.id === 'tools-panel') {
-        panelSizes.tools = newWidth;
-      }
+      (sidebar as HTMLElement).style.width = `${newWidth}px`;
     });
     
     document.addEventListener('mouseup', () => {
-      if (isResizing) {
+      if (isResizing && sidebar) {
         isResizing = false;
-        resizer.classList.remove('resizing');
+        (resizer as HTMLElement).classList.remove('resizing');
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         
-        // Persist sizes
-        localStorage.setItem('panel-structure-width', panelSizes.structure.toString());
-        localStorage.setItem('panel-tools-width', panelSizes.tools.toString());
+        // Persist sidebar widths
+        const isLeftResizer = resizer.classList.contains('resizer-left');
+        if (isLeftResizer) {
+          panelSizes.left = (sidebar as HTMLElement).offsetWidth;
+          localStorage.setItem('sidebar-left-width', panelSizes.left.toString());
+        } else {
+          panelSizes.right = (sidebar as HTMLElement).offsetWidth;
+          localStorage.setItem('sidebar-right-width', panelSizes.right.toString());
+        }
       }
     });
   });
+  
+  // Apply persisted sizes
+  const sidebarLeft = document.getElementById('sidebar-left') as HTMLElement;
+  const sidebarRight = document.getElementById('sidebar-right') as HTMLElement;
+  
+  if (sidebarLeft) sidebarLeft.style.width = `${panelSizes.left}px`;
+  if (sidebarRight) sidebarRight.style.width = `${panelSizes.right}px`;
 }
 
-// Collapse functionality
-function initCollapseButtons() {
-  const collapseButtons = document.querySelectorAll('.collapse-btn');
+// ==============================================================================
+// DOMAIN: STRUCTURE
+// ==============================================================================
+
+/**
+ * Initialize Structure domain - document organization and navigation
+ */
+function initStructureDomain() {
+  // Will be bound when project is loaded
+}
+
+/**
+ * Load project via Electron dialog
+ */
+async function loadProject() {
+  try {
+    const project = await (window as unknown as WindowWithElectron).electronAPI.loadProjectFile();
+    if (project) {
+      currentProject = project;
+      renderProjectStructure(project);
+      updateProjectInfo(project);
+    }
+  } catch (err) {
+    console.error('Failed to load project:', err);
+  }
+}
+
+/**
+ * Update project title and stats in menu bar
+ */
+function updateProjectInfo(project: any) {
+  const titleEl = document.getElementById('project-title');
+  const statsEl = document.getElementById('project-stats');
   
-  collapseButtons.forEach(button => {
-    button.addEventListener('click', () => {
-      const panelId = button.getAttribute('data-panel');
-      const panel = document.getElementById(panelId!);
+  if (titleEl) titleEl.textContent = project.title || 'Untitled';
+  if (statsEl) {
+    const totalWords = computeProjectWordCount();
+    statsEl.textContent = `${totalWords} words`;
+  }
+}
+
+/**
+ * Render the document structure tree in the Structure panel
+ */
+function renderProjectStructure(project: any) {
+  const treeContainer = document.getElementById('structure-tree');
+  if (!treeContainer) return;
+  
+  treeContainer.innerHTML = '';
+  
+  // Project root node
+  const projectNode = createTreeItem('📄', project.title || 'Untitled', 'project');
+  treeContainer.appendChild(projectNode);
+  
+  // Sections
+  if (project.sections && project.sections.length > 0) {
+    project.sections.forEach((section: any) => {
+      const sectionNode = createTreeItem(
+        getSectionIcon(section.kind),
+        section.title || capitalizeKind(section.kind),
+        'section',
+        `${computeSectionWordCount(section)} words`
+      );
       
-      if (panel) {
-        panel.classList.toggle('collapsed');
-        button.textContent = panel.classList.contains('collapsed') ? '+' : '−';
+      const sectionContainer = document.createElement('div');
+      sectionContainer.className = 'tree-node';
+      
+      // Chapters
+      if (section.chapters && section.chapters.length > 0) {
+        section.chapters.forEach((chapter: any) => {
+          const chapterNode = createTreeItem(
+            '📖',
+            chapter.title || `Item ${chapter.order}`,
+            'chapter',
+            `${chapterWordCount(chapter)} words`,
+            chapter
+          );
+          
+          const chapterContainer = document.createElement('div');
+          chapterContainer.className = 'tree-node';
+          
+          // Scenes (if present)
+          if (chapter.scenes && chapter.scenes.length > 0) {
+            chapter.scenes.forEach((scene: any) => {
+              const sceneNode = createTreeItem(
+                '✦',
+                scene.label || `Scene ${scene.order}`,
+                'scene',
+                `${scene.paragraphs?.length || 0}¶`
+              );
+              
+              sceneNode.classList.add('scene-item');
+              sceneNode.setAttribute('draggable', 'true');
+              (sceneNode as any).dataset.sceneId = scene.id;
+              (sceneNode as any).dataset.chapterId = chapter.id;
+              
+              // Scene drag handlers
+              sceneNode.addEventListener('dragstart', (ev) => {
+                ev.dataTransfer?.setData('text/scene', JSON.stringify({ sceneId: scene.id, chapterId: chapter.id }));
+              });
+              sceneNode.addEventListener('dragover', (ev) => {
+                ev.preventDefault();
+                sceneNode.classList.add('drag-over');
+              });
+              sceneNode.addEventListener('dragleave', () => sceneNode.classList.remove('drag-over'));
+              sceneNode.addEventListener('drop', (ev) => {
+                ev.preventDefault();
+                sceneNode.classList.remove('drag-over');
+                const dataStr = ev.dataTransfer?.getData('text/scene');
+                if (!dataStr) return;
+                try {
+                  const { sceneId: srcId, chapterId: srcChap } = JSON.parse(dataStr);
+                  const dstId = (sceneNode as any).dataset.sceneId;
+                  const dstChap = (sceneNode as any).dataset.chapterId;
+                  if (srcId && dstId && srcChap === dstChap) {
+                    reorderSceneByIds(dstChap, srcId, dstId);
+                  }
+                } catch {}
+              });
+              
+              chapterContainer.appendChild(sceneNode);
+            });
+          }
+          
+          sectionContainer.appendChild(chapterNode);
+          sectionContainer.appendChild(chapterContainer);
+        });
+      }
+      
+      treeContainer.appendChild(sectionNode);
+      treeContainer.appendChild(sectionContainer);
+    });
+  }
+  
+  // Update structure metadata
+  updateStructureMeta();
+}
+
+/**
+ * Update structure panel footer with metadata
+ */
+function updateStructureMeta() {
+  const metaEl = document.getElementById('structure-meta');
+  if (metaEl && currentProject) {
+    const total = computeProjectWordCount();
+    metaEl.textContent = `${total} words total`;
+  }
+}
+
+/**
+ * Create a tree item (project, section, chapter, or scene)
+ */
+function createTreeItem(icon: string, label: string, type: string, meta?: string, data?: any): HTMLElement {
+  const item = document.createElement('div');
+  item.className = 'tree-item';
+  item.dataset.type = type;
+  
+  if (type === 'chapter' && data?.id) {
+    item.setAttribute('draggable', 'true');
+    item.dataset.chapterId = data.id;
+    
+    // Chapter drag handlers
+    item.addEventListener('dragstart', (ev) => {
+      ev.dataTransfer?.setData('text/plain', data.id);
+    });
+    item.addEventListener('dragover', (ev) => {
+      ev.preventDefault();
+      item.classList.add('drag-over');
+    });
+    item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+    item.addEventListener('drop', (ev) => {
+      ev.preventDefault();
+      item.classList.remove('drag-over');
+      const srcId = ev.dataTransfer?.getData('text/plain');
+      const dstId = item.dataset.chapterId;
+      if (srcId && dstId && srcId !== dstId) {
+        reorderChapterByIds(srcId, dstId);
       }
     });
-  });
-}
-
-// Load button
-function initLoadButton() {
-  const loadBtn = document.getElementById('load-project-btn');
+  }
   
-  loadBtn?.addEventListener('click', async () => {
-    try {
-      const project = await (window as unknown as WindowWithElectron).electronAPI.loadProjectFile();
-      if (project) {
-        currentProject = project;
-        renderProjectStructure(project);
+  // Icon
+  const iconSpan = document.createElement('span');
+  iconSpan.className = 'tree-icon';
+  iconSpan.textContent = icon;
+  
+  // Label
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'tree-label';
+  labelSpan.textContent = label;
+  
+  // Double-click to rename (chapters only)
+  if (type === 'chapter' && data) {
+    labelSpan.addEventListener('dblclick', (ev) => {
+      ev.stopPropagation();
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = data.title || label;
+      input.className = 'tree-label';
+      item.replaceChild(input, labelSpan);
+      input.focus();
+      
+      const commit = () => {
+        const newVal = input.value.trim();
+        if (newVal) data.title = newVal;
+        labelSpan.textContent = data.title || label;
+        item.replaceChild(labelSpan, input);
+        if (currentProject) renderProjectStructure(currentProject);
+      };
+      
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', (e) => {
+        const k = e as KeyboardEvent;
+        if (k.key === 'Enter') commit();
+        else if (k.key === 'Escape') item.replaceChild(labelSpan, input);
+      });
+    });
+  }
+  
+  item.appendChild(iconSpan);
+  item.appendChild(labelSpan);
+  
+  // Metadata
+  if (meta) {
+    const metaSpan = document.createElement('span');
+    metaSpan.className = 'tree-meta';
+    metaSpan.textContent = meta;
+    item.appendChild(metaSpan);
+  }
+  
+  // Chapter action buttons
+  if (type === 'chapter' && data) {
+    const actions = document.createElement('div');
+    actions.className = 'tree-actions';
+    
+    const btnUp = document.createElement('button');
+    btnUp.className = 'tree-action-btn';
+    btnUp.title = 'Move up';
+    btnUp.textContent = '↑';
+    btnUp.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      moveChapter(data, -1);
+    });
+    
+    const btnDown = document.createElement('button');
+    btnDown.className = 'tree-action-btn';
+    btnDown.title = 'Move down';
+    btnDown.textContent = '↓';
+    btnDown.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      moveChapter(data, +1);
+    });
+    
+    const btnRename = document.createElement('button');
+    btnRename.className = 'tree-action-btn';
+    btnRename.title = 'Rename';
+    btnRename.textContent = '✎';
+    btnRename.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const newName = prompt('Rename item', data.title || 'Item');
+      if (newName && currentProject) {
+        data.title = newName;
+        renderProjectStructure(currentProject);
       }
-    } catch (err) {
-      console.error('Failed to load project:', err);
-    }
-  });
-}
-
-function initPlannerActions() {
-  const addBtn = document.getElementById('add-chapter-btn');
-  addBtn?.addEventListener('click', () => {
-    if (!currentProject) return;
-    let body = currentProject.sections?.find((s: any) => s.kind === 'body');
-    if (!body) {
-      body = { kind: 'body', title: 'Body', chapters: [] };
-      currentProject.sections = currentProject.sections || [];
-      currentProject.sections.push(body);
-    }
-    const nextOrder = (body.chapters?.length || 0) + 1;
-    const newChapter = {
-      id: `chap_${Date.now()}`,
-      order: nextOrder,
-      title: `Chapter ${nextOrder}`,
-      scenes: [{ id: `scene_${Date.now()}`, order: 1, label: 'Scene 1', paragraphs: [] }]
-    };
-    body.chapters = body.chapters || [];
-    body.chapters.push(newChapter);
-    renderProjectStructure(currentProject);
-  });
-}
-
-// Restore panel sizes from localStorage
-function restorePanelSizes() {
-  const structurePanel = document.getElementById('structure-panel');
-  const toolsPanel = document.getElementById('tools-panel');
-  
-  if (structurePanel) {
-    structurePanel.style.width = `${panelSizes.structure}px`;
+    });
+    
+    const btnAddScene = document.createElement('button');
+    btnAddScene.className = 'tree-action-btn';
+    btnAddScene.title = 'Add scene';
+    btnAddScene.textContent = '+';
+    btnAddScene.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (!currentProject) return;
+      data.scenes = data.scenes || [];
+      const nextOrder = data.scenes.length + 1;
+      data.scenes.push({ 
+        id: `scene_${Date.now()}`, 
+        order: nextOrder, 
+        label: `Scene ${nextOrder}`, 
+        paragraphs: [] 
+      });
+      renderProjectStructure(currentProject);
+    });
+    
+    actions.appendChild(btnUp);
+    actions.appendChild(btnDown);
+    actions.appendChild(btnRename);
+    actions.appendChild(btnAddScene);
+    item.appendChild(actions);
   }
   
-  if (toolsPanel) {
-    toolsPanel.style.width = `${panelSizes.tools}px`;
+  // Chapter selection
+  if (type === 'chapter' && data) {
+    item.addEventListener('click', () => {
+      if (currentChapterElement) {
+        currentChapterElement.classList.remove('active');
+      }
+      item.classList.add('active');
+      currentChapterElement = item;
+      loadChapterContent(data);
+      updateAnalytics();
+    });
+  }
+  
+  return item;
+}
+
+/**
+ * Move chapter up or down
+ */
+function moveChapter(chapter: any, delta: number) {
+  if (!currentProject) return;
+  const body = currentProject.sections?.find((s: any) => s.kind === 'body');
+  if (!body || !Array.isArray(body.chapters)) return;
+  
+  const idx = body.chapters.findIndex((c: any) => c.id === chapter.id);
+  if (idx < 0) return;
+  
+  const target = idx + delta;
+  if (target < 0 || target >= body.chapters.length) return;
+  
+  // Swap
+  const tmp = body.chapters[idx];
+  body.chapters[idx] = body.chapters[target];
+  body.chapters[target] = tmp;
+  
+  // Reassign orders
+  body.chapters.forEach((c: any, i: number) => c.order = i + 1);
+  renderProjectStructure(currentProject);
+}
+
+/**
+ * Reorder scenes within a chapter
+ */
+function reorderSceneByIds(chapterId: string, srcSceneId: string, dstSceneId: string) {
+  if (!currentProject) return;
+  const body = currentProject.sections?.find((s: any) => s.kind === 'body');
+  if (!body) return;
+  
+  const chapter = body.chapters?.find((c: any) => c.id === chapterId);
+  if (!chapter || !Array.isArray(chapter.scenes)) return;
+  
+  const srcIdx = chapter.scenes.findIndex((s: any) => s.id === srcSceneId);
+  const dstIdx = chapter.scenes.findIndex((s: any) => s.id === dstSceneId);
+  if (srcIdx < 0 || dstIdx < 0) return;
+  
+  const [moved] = chapter.scenes.splice(srcIdx, 1);
+  chapter.scenes.splice(dstIdx, 0, moved);
+  chapter.scenes.forEach((s: any, i: number) => s.order = i + 1);
+  
+  renderProjectStructure(currentProject);
+}
+
+/**
+ * Reorder chapters
+ */
+function reorderChapterByIds(srcId: string, dstId: string) {
+  if (!currentProject) return;
+  const body = currentProject.sections?.find((s: any) => s.kind === 'body');
+  if (!body || !Array.isArray(body.chapters)) return;
+  
+  const srcIdx = body.chapters.findIndex((c: any) => c.id === srcId);
+  const dstIdx = body.chapters.findIndex((c: any) => c.id === dstId);
+  if (srcIdx < 0 || dstIdx < 0) return;
+  
+  const [moved] = body.chapters.splice(srcIdx, 1);
+  body.chapters.splice(dstIdx, 0, moved);
+  body.chapters.forEach((c: any, i: number) => c.order = i + 1);
+  
+  renderProjectStructure(currentProject);
+}
+
+/**
+ * Add a new chapter to the body section
+ */
+function addChapter() {
+  if (!currentProject) return;
+  
+  let body = currentProject.sections?.find((s: any) => s.kind === 'body');
+  if (!body) {
+    body = { kind: 'body', title: 'Body', chapters: [] };
+    currentProject.sections = currentProject.sections || [];
+    currentProject.sections.push(body);
+  }
+  
+  const nextOrder = (body.chapters?.length || 0) + 1;
+  const newChapter = {
+    id: `chap_${Date.now()}`,
+    order: nextOrder,
+    title: `Item ${nextOrder}`,
+    scenes: [{ id: `scene_${Date.now()}`, order: 1, label: 'Scene 1', paragraphs: [] }]
+  };
+  
+  body.chapters = body.chapters || [];
+  body.chapters.push(newChapter);
+  renderProjectStructure(currentProject);
+}
+
+/**
+ * Get icon for section kind
+ */
+function getSectionIcon(kind: string): string {
+  switch (kind) {
+    case 'frontMatter': return '📑';
+    case 'body': return '📚';
+    case 'backMatter': return '📋';
+    default: return '📄';
   }
 }
 
-// Initialize editor and wrap controls
-function initEditor() {
+/**
+ * Capitalize section kind for display
+ */
+function capitalizeKind(kind: string): string {
+  const words: Record<string, string> = {
+    'frontMatter': 'Front Matter',
+    'body': 'Body',
+    'backMatter': 'Back Matter'
+  };
+  return words[kind] || kind;
+}
+
+// ==============================================================================
+// DOMAIN: WRITING
+// ==============================================================================
+
+/**
+ * Initialize Writing domain - clean text editing interface
+ */
+function initWritingDomain() {
   const editor = document.getElementById('editor') as HTMLTextAreaElement;
-  const wrapControl = document.getElementById('wrap-control');
-  const editorContainer = document.getElementById('editor-container');
-  const emptyState = document.getElementById('editor-empty');
   
   if (!editor) return;
   
-  // Handle clean paste (strip formatting, preserve plain text only)
+  // Handle paste events: strip formatting, preserve plain text
   editor.addEventListener('paste', (e: Event) => {
     const clipboardEvent = e as ClipboardEvent;
     e.preventDefault();
     
-    // Extract plain text only, no formatting injection
     const text = clipboardEvent.clipboardData?.getData('text/plain') || '';
     const start = editor.selectionStart;
     const end = editor.selectionEnd;
+    
     const before = editor.value.substring(0, start);
     const after = editor.value.substring(end);
-    
     editor.value = before + text + after;
     
-    // Restore cursor position after paste (stable cursor)
+    // Restore cursor
     const newPosition = start + text.length;
     editor.selectionStart = editor.selectionEnd = newPosition;
     
-    // Update model
     updateChapterContent(editor.value);
+    updateAnalytics();
   });
   
-  // Handle content changes (typing, deletions, etc.)
+  // Handle content changes
   editor.addEventListener('input', () => {
     updateChapterContent(editor.value);
-    updateWordCount(editor.value);
+    updateAnalytics();
   });
+}
+
+/**
+ * Load chapter content into editor
+ */
+function loadChapterContent(chapter: any) {
+  const editor = document.getElementById('editor') as HTMLTextAreaElement;
+  const editorContainer = document.getElementById('editor-container');
+  const emptyState = document.getElementById('editor-empty');
+  const header = document.getElementById('editor-header');
+  const titleEl = document.getElementById('editor-title');
+  const numberEl = document.getElementById('editor-number');
   
-  // Wrap width presets
-  const presets = document.querySelectorAll('.wrap-preset');
-  presets.forEach(preset => {
+  if (!editor) return;
+  
+  currentChapter = chapter;
+  
+  // Extract text from chapter (scenes or paragraphs)
+  let text = '';
+  if (chapter.scenes && chapter.scenes.length > 0) {
+    text = chapter.scenes
+      .map((scene: any) => 
+        scene.paragraphs?.map((p: any) => p.content).join('\n\n') || ''
+      )
+      .join('\n\n---\n\n');
+  } else if (chapter.paragraphs && chapter.paragraphs.length > 0) {
+    text = chapter.paragraphs.map((p: any) => p.content).join('\n\n');
+  }
+  
+  editor.value = text;
+  
+  // Update header
+  if (header && titleEl && numberEl) {
+    const number = chapter.order ?? '';
+    const title = chapter.title || `Item ${number}`;
+    numberEl.textContent = number ? String(number) : '';
+    titleEl.textContent = title;
+    header.style.display = 'block';
+  }
+  
+  // Show editor, hide empty state
+  if (editorContainer && emptyState) {
+    editorContainer.style.display = 'flex';
+    emptyState.style.display = 'none';
+  }
+  
+  editor.focus();
+}
+
+/**
+ * Update chapter content in memory from editor
+ */
+function updateChapterContent(text: string) {
+  if (!currentChapter) return;
+  
+  const paragraphs = text
+    .split(/\n\n+/)
+    .map(p => p.trim())
+    .filter(p => p.length > 0)
+    .map((content, idx) => ({
+      id: currentChapter.paragraphs?.[idx]?.id || `para_${Date.now()}_${idx}`,
+      order: idx + 1,
+      content
+    }));
+  
+  if (currentChapter.scenes) {
+    if (currentChapter.scenes[0]) {
+      currentChapter.scenes[0].paragraphs = paragraphs;
+    }
+  } else {
+    currentChapter.paragraphs = paragraphs;
+  }
+}
+
+// ==============================================================================
+// DOMAIN: LAYOUT
+// ==============================================================================
+
+/**
+ * Initialize Layout domain - non-destructive visual controls
+ */
+function initLayoutDomain() {
+  // Line width presets
+  document.querySelectorAll('.layout-preset').forEach(preset => {
     preset.addEventListener('click', () => {
       const width = parseInt(preset.getAttribute('data-width') || '1000');
       setWrapWidth(width);
       
       // Update active state
-      presets.forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.layout-preset').forEach(p => p.classList.remove('active'));
       preset.classList.add('active');
     });
   });
+  
+  // Line height slider
+  const lineHeightSlider = document.getElementById('line-height-slider-panel') as HTMLInputElement;
+  const lineHeightDisplay = document.getElementById('line-height-display');
+  
+  lineHeightSlider?.addEventListener('input', () => {
+    const value = parseFloat(lineHeightSlider.value);
+    setLineHeight(value);
+    if (lineHeightDisplay) lineHeightDisplay.textContent = value.toFixed(1);
+  });
+  
+  // Character spacing slider
+  const charSpacingSlider = document.getElementById('char-spacing-slider') as HTMLInputElement;
+  const charSpacingDisplay = document.getElementById('char-spacing-display');
+  
+  charSpacingSlider?.addEventListener('input', () => {
+    const value = parseFloat(charSpacingSlider.value);
+    setCharSpacing(value);
+    if (charSpacingDisplay) charSpacingDisplay.textContent = value.toFixed(2);
+  });
+  
+  // Restore layout state
+  restoreLayoutState();
 }
 
+/**
+ * Set editor wrap width (non-destructive)
+ */
+function setWrapWidth(width: number) {
+  const editor = document.getElementById('editor') as HTMLTextAreaElement;
+  if (!editor) return;
+  
+  layoutState.wrapWidth = width;
+  
+  if (width === 0) {
+    editor.style.maxWidth = '100%';
+  } else {
+    editor.style.maxWidth = `${width}px`;
+  }
+  
+  localStorage.setItem('editor-wrap-width', width.toString());
+}
+
+/**
+ * Set editor line height (non-destructive)
+ */
+function setLineHeight(value: number) {
+  const editor = document.getElementById('editor') as HTMLTextAreaElement;
+  if (!editor) return;
+  
+  layoutState.lineHeight = value;
+  editor.style.lineHeight = value.toString();
+  
+  localStorage.setItem('editor-line-height', value.toString());
+}
+
+/**
+ * Set editor character spacing (non-destructive)
+ */
+function setCharSpacing(value: number) {
+  const editor = document.getElementById('editor') as HTMLTextAreaElement;
+  if (!editor) return;
+  
+  layoutState.charSpacing = value;
+  editor.style.letterSpacing = `${value}em`;
+  
+  localStorage.setItem('editor-char-spacing', value.toString());
+}
+
+/**
+ * Restore layout state from localStorage
+ */
+function restoreLayoutState() {
+  setWrapWidth(layoutState.wrapWidth);
+  setLineHeight(layoutState.lineHeight);
+  setCharSpacing(layoutState.charSpacing);
+  
+  // Update sliders
+  const lineHeightSlider = document.getElementById('line-height-slider-panel') as HTMLInputElement;
+  const lineHeightDisplay = document.getElementById('line-height-display');
+  if (lineHeightSlider) lineHeightSlider.value = layoutState.lineHeight.toString();
+  if (lineHeightDisplay) lineHeightDisplay.textContent = layoutState.lineHeight.toFixed(1);
+  
+  const charSpacingSlider = document.getElementById('char-spacing-slider') as HTMLInputElement;
+  const charSpacingDisplay = document.getElementById('char-spacing-display');
+  if (charSpacingSlider) charSpacingSlider.value = layoutState.charSpacing.toString();
+  if (charSpacingDisplay) charSpacingDisplay.textContent = layoutState.charSpacing.toFixed(2);
+}
+
+// ==============================================================================
+// DOMAIN: ANALYSIS
+// ==============================================================================
+
+/**
+ * Initialize Analysis domain - read-only statistics
+ */
+function initAnalysisDomain() {
+  // Analytics update happens on editor input via updateAnalytics()
+}
+
+/**
+ * Update analytics display
+ */
+function updateAnalytics() {
+  const editor = document.getElementById('editor') as HTMLTextAreaElement;
+  if (!editor) return;
+  
+  const text = editor.value;
+  const words = countWords(text);
+  const chars = text.length;
+  const paragraphs = text.split(/\n\n+/).filter(p => p.trim().length > 0).length;
+  const avgLine = paragraphs > 0 ? Math.round(chars / paragraphs) : 0;
+  
+  const statsWords = document.getElementById('stat-words');
+  const statsChars = document.getElementById('stat-chars');
+  const statsParagraphs = document.getElementById('stat-paragraphs');
+  const statsAvgLine = document.getElementById('stat-avg-line');
+  
+  if (statsWords) statsWords.textContent = words.toString();
+  if (statsChars) statsChars.textContent = chars.toString();
+  if (statsParagraphs) statsParagraphs.textContent = paragraphs.toString();
+  if (statsAvgLine) statsAvgLine.textContent = avgLine.toString();
+  
+  updateProjectInfo(currentProject);
+}
+
+/**
+ * Count words in text
+ */
+function countWords(text: string): number {
+  const tokens = text.trim().split(/\s+/).filter(t => t.length > 0);
+  return tokens.length;
+}
+
+// ==============================================================================
+// EXPORT FUNCTIONS
+// ==============================================================================
+
+/**
+ * Export project as JSON
+ */
 function exportAsJSON() {
   if (!currentProject) return;
   const json = JSON.stringify(currentProject, null, 2);
@@ -231,17 +1036,23 @@ function exportAsJSON() {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Export project as Markdown
+ */
 function exportAsMarkdown() {
   if (!currentProject) return;
+  
   let md = `# ${currentProject.title || 'Untitled'}\n\n`;
   if (currentProject.metadata?.author) md += `**Author:** ${currentProject.metadata.author}\n\n`;
   
   currentProject.sections?.forEach((section: any) => {
     md += `## ${section.title || section.kind}\n\n`;
     md += `*${computeSectionWordCount(section)} words*\n\n`;
+    
     section.chapters?.forEach((chapter: any) => {
-      md += `### ${chapter.title || `Chapter ${chapter.order}`}\n\n`;
+      md += `### ${chapter.title || `Item ${chapter.order}`}\n\n`;
       md += `*${chapterWordCount(chapter)} words*\n\n`;
+      
       if (chapter.scenes?.length) {
         chapter.scenes.forEach((scene: any) => {
           md += `#### ${scene.label || `Scene ${scene.order}`}\n\n`;
@@ -266,102 +1077,13 @@ function exportAsMarkdown() {
   URL.revokeObjectURL(url);
 }
 
-function initToolsRail() {
-  const toolsContent = document.getElementById('tools-content');
-  const rail = document.querySelectorAll('.tool-btn');
-  rail.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const action = (btn as HTMLElement).dataset.action;
-      switch (action) {
-        case 'search':
-          if (toolsContent) {
-            const panel = document.getElementById('search-panel');
-            if (panel) panel.style.display = 'flex';
-          }
-          break;
-        case 'wrap':
-          toolsContent && (toolsContent.textContent = 'Use Wrap presets above the editor.');
-          const wc = document.getElementById('wrap-control');
-          if (wc) wc.style.display = 'flex';
-          break;
-        case 'stats':
-          const text = (document.getElementById('editor') as HTMLTextAreaElement)?.value || '';
-          toolsContent && (toolsContent.textContent = `Words: ${countWords(text)} | Characters: ${text.length}`);
-          break;
-        case 'export':
-          if (toolsContent) {
-            toolsContent.innerHTML = `
-              <div style="display:flex;flex-direction:column;gap:8px;">
-                <button id="export-json-btn" style="width:100%;">Export as JSON</button>
-                <button id="export-md-btn" style="width:100%;">Export as Markdown</button>
-              </div>
-            `;
-            const jsonBtn = document.getElementById('export-json-btn');
-            const mdBtn = document.getElementById('export-md-btn');
-            jsonBtn?.addEventListener('click', exportAsJSON);
-            mdBtn?.addEventListener('click', exportAsMarkdown);
-          }
-          break;
-      }
-    });
-  });
-}
+// ==============================================================================
+// UTILITY FUNCTIONS
+// ==============================================================================
 
-// Simple in-text search navigation for textarea
-let searchMatches: number[] = [];
-let currentMatchIndex = -1;
-
-document.addEventListener('DOMContentLoaded', () => {
-  const input = document.getElementById('search-input') as HTMLInputElement | null;
-  const prevBtn = document.getElementById('search-prev');
-  const nextBtn = document.getElementById('search-next');
-  const status = document.getElementById('search-status');
-  const editor = document.getElementById('editor') as HTMLTextAreaElement | null;
-  function recomputeMatches() {
-    if (!input || !editor) return;
-    const q = input.value.trim();
-    searchMatches = [];
-    currentMatchIndex = -1;
-    if (!q) { status && (status.textContent = ''); return; }
-    const text = editor.value;
-    let idx = 0;
-    const lowerText = text.toLowerCase();
-    const lowerQ = q.toLowerCase();
-    while ((idx = lowerText.indexOf(lowerQ, idx)) !== -1) {
-      searchMatches.push(idx);
-      idx += lowerQ.length;
-    }
-    status && (status.textContent = `${searchMatches.length} match${searchMatches.length === 1 ? '' : 'es'}`);
-  }
-  function jumpTo(offsetIndex: number) {
-    if (!editor || searchMatches.length === 0) return;
-    currentMatchIndex = (offsetIndex + searchMatches.length) % searchMatches.length;
-    const pos = searchMatches[currentMatchIndex];
-    editor.focus();
-    editor.selectionStart = pos;
-    editor.selectionEnd = pos + (input?.value.length || 0);
-    editor.scrollTop = editor.scrollHeight * (pos / (editor.value.length || 1));
-    status && (status.textContent = `${currentMatchIndex + 1}/${searchMatches.length}`);
-  }
-  input?.addEventListener('input', () => { recomputeMatches(); });
-  prevBtn?.addEventListener('click', () => { if (searchMatches.length) jumpTo(currentMatchIndex - 1); });
-  nextBtn?.addEventListener('click', () => { if (searchMatches.length) jumpTo(currentMatchIndex + 1); });
-});
-
-function countWords(text: string): number {
-  const tokens = text.trim().split(/\s+/).filter(t => t.length > 0);
-  return tokens.length;
-}
-
-function updateWordCount(text: string) {
-  const wcEl = document.getElementById('word-count');
-  if (wcEl) {
-    const current = countWords(text);
-    const total = computeProjectWordCount();
-    wcEl.textContent = `${current} words | ${total} total`;
-  }
-}
-
+/**
+ * Compute total word count for project
+ */
 function computeProjectWordCount(): number {
   if (!currentProject) return 0;
   let total = 0;
@@ -373,6 +1095,9 @@ function computeProjectWordCount(): number {
   return total;
 }
 
+/**
+ * Compute word count for section
+ */
 function computeSectionWordCount(section: any): number {
   let total = 0;
   section.chapters?.forEach((chapter: any) => {
@@ -381,426 +1106,9 @@ function computeSectionWordCount(section: any): number {
   return total;
 }
 
-// Set wrap width (visual only, does NOT alter content or insert line breaks)
-function setWrapWidth(width: number) {
-  const editor = document.getElementById('editor') as HTMLTextAreaElement;
-  if (!editor) return;
-  
-  wrapWidth = width;
-  
-  if (width === 0) {
-    // Full width
-    editor.style.maxWidth = '100%';
-  } else {
-    editor.style.maxWidth = `${width}px`;
-  }
-  
-  localStorage.setItem('editor-wrap-width', width.toString());
-}
-
-function restoreWrapWidth() {
-  setWrapWidth(wrapWidth);
-  
-  // Set active preset button
-  const presets = document.querySelectorAll('.wrap-preset');
-  presets.forEach(preset => {
-    const width = parseInt(preset.getAttribute('data-width') || '1000');
-    if (width === wrapWidth) {
-      preset.classList.add('active');
-    } else {
-      preset.classList.remove('active');
-    }
-  });
-}
-
-// Update chapter content in memory (no persistence yet)
-function updateChapterContent(text: string) {
-  if (!currentChapter) return;
-  
-  // Split text into paragraphs by double newlines
-  const paragraphs = text
-    .split(/\n\n+/)
-    .map(p => p.trim())
-    .filter(p => p.length > 0)
-    .map((content, idx) => ({
-      id: currentChapter.paragraphs?.[idx]?.id || `para_${Date.now()}_${idx}`,
-      order: idx + 1,
-      content
-    }));
-  
-  // Update chapter with new paragraph structure
-  if (currentChapter.scenes) {
-    // If chapter has scenes, update first scene for simplicity (v0)
-    if (currentChapter.scenes[0]) {
-      currentChapter.scenes[0].paragraphs = paragraphs;
-    }
-  } else {
-    currentChapter.paragraphs = paragraphs;
-  }
-}
-
-// Load chapter content into editor
-function loadChapterContent(chapter: any) {
-  const editor = document.getElementById('editor') as HTMLTextAreaElement;
-  const wrapControl = document.getElementById('wrap-control');
-  const editorContainer = document.getElementById('editor-container');
-  const emptyState = document.getElementById('editor-empty');
-  const header = document.getElementById('editor-header');
-  const titleEl = document.getElementById('editor-title');
-  const numberEl = document.getElementById('editor-number');
-  
-  if (!editor) return;
-  
-  currentChapter = chapter;
-  
-  // Extract text from chapter (scenes or paragraphs)
-  let text = '';
-  if (chapter.scenes && chapter.scenes.length > 0) {
-    // Flatten scenes into paragraphs, separated by double newlines
-    text = chapter.scenes
-      .map((scene: any) => 
-        scene.paragraphs?.map((p: any) => p.content).join('\n\n') || ''
-      )
-      .join('\n\n---\n\n'); // Scene break marker
-  } else if (chapter.paragraphs && chapter.paragraphs.length > 0) {
-    text = chapter.paragraphs.map((p: any) => p.content).join('\n\n');
-  }
-  
-  // Load into editor without triggering input event
-  editor.value = text;
-  // Header info
-  if (header && titleEl && numberEl) {
-    const number = chapter.order ?? '';
-    const title = chapter.title || `Chapter ${number}`;
-    numberEl.textContent = number ? String(number) : '';
-    titleEl.textContent = title;
-    header.style.display = 'block';
-  }
-  
-  // Show editor, hide empty state
-  if (editorContainer && emptyState && wrapControl) {
-    editorContainer.style.display = 'flex';
-    emptyState.style.display = 'none';
-    wrapControl.style.display = 'flex';
-  }
-  
-  // Focus editor for immediate writing
-  editor.focus();
-}
-
-// Render project structure tree
-function renderProjectStructure(project: any) {
-  const treeContainer = document.getElementById('structure-tree');
-  if (!treeContainer) return;
-  
-  treeContainer.innerHTML = '';
-  
-  // Update footer with project totals
-  const wcEl = document.getElementById('word-count');
-  if (wcEl) wcEl.textContent = `${computeProjectWordCount()} total words`;
-  
-  // Project root
-  const projectNode = createTreeItem('📄', project.title || 'Untitled Project', 'project');
-  treeContainer.appendChild(projectNode);
-  
-  // Sections
-  if (project.sections && project.sections.length > 0) {
-    project.sections.forEach((section: any) => {
-      const sectionNode = createTreeItem(
-        getSectionIcon(section.kind),
-        section.title || capitalizeKind(section.kind),
-        'section',
-        `${computeSectionWordCount(section)} words`
-      );
-      
-      const sectionContainer = document.createElement('div');
-      sectionContainer.className = 'tree-node';
-      
-      // Chapters
-      if (section.chapters && section.chapters.length > 0) {
-        section.chapters.forEach((chapter: any) => {
-          const chapterNode = createTreeItem(
-            '📖',
-            chapter.title || `Chapter ${chapter.order}`,
-            'chapter',
-            `${chapterWordCount(chapter)} words`,
-            chapter
-          );
-          
-          const chapterContainer = document.createElement('div');
-          chapterContainer.className = 'tree-node';
-          
-          // Scenes (if present)
-          if (chapter.scenes && chapter.scenes.length > 0) {
-            chapter.scenes.forEach((scene: any) => {
-              const sceneNode = createTreeItem(
-                '✦',
-                scene.label || `Scene ${scene.order}`,
-                'scene',
-                `${scene.paragraphs?.length || 0}¶`
-              );
-              // Scene DnD
-              sceneNode.classList.add('scene-item');
-              sceneNode.setAttribute('draggable', 'true');
-              (sceneNode as any).dataset.sceneId = scene.id;
-              (sceneNode as any).dataset.chapterId = chapter.id;
-              sceneNode.addEventListener('dragstart', (ev) => {
-                ev.dataTransfer?.setData('text/scene', JSON.stringify({ sceneId: scene.id, chapterId: chapter.id }));
-              });
-              sceneNode.addEventListener('dragover', (ev) => {
-                ev.preventDefault();
-                sceneNode.classList.add('drag-over');
-              });
-              sceneNode.addEventListener('dragleave', () => sceneNode.classList.remove('drag-over'));
-              sceneNode.addEventListener('drop', (ev) => {
-                ev.preventDefault();
-                sceneNode.classList.remove('drag-over');
-                const dataStr = ev.dataTransfer?.getData('text/scene');
-                if (!dataStr) return;
-                try {
-                  const { sceneId: srcId, chapterId: srcChap } = JSON.parse(dataStr);
-                  const dstId = (sceneNode as any).dataset.sceneId;
-                  const dstChap = (sceneNode as any).dataset.chapterId;
-                  if (srcId && dstId && srcChap === dstChap) {
-                    reorderSceneByIds(dstChap, srcId, dstId);
-                  }
-                } catch {}
-              });
-              chapterContainer.appendChild(sceneNode);
-            });
-          }
-          
-          sectionContainer.appendChild(chapterNode);
-          sectionContainer.appendChild(chapterContainer);
-        });
-      }
-      
-      treeContainer.appendChild(sectionNode);
-      treeContainer.appendChild(sectionContainer);
-    });
-  }
-}
-
-function createTreeItem(icon: string, label: string, type: string, meta?: string, data?: any): HTMLElement {
-  const item = document.createElement('div');
-  item.className = 'tree-item';
-  item.dataset.type = type;
-  if (type === 'chapter' && data?.id) {
-    item.setAttribute('draggable', 'true');
-    item.dataset.chapterId = data.id;
-    // Drag handlers
-    item.addEventListener('dragstart', (ev) => {
-      ev.dataTransfer?.setData('text/plain', data.id);
-    });
-    item.addEventListener('dragover', (ev) => {
-      ev.preventDefault();
-      item.classList.add('drag-over');
-    });
-    item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
-    item.addEventListener('drop', (ev) => {
-      ev.preventDefault();
-      item.classList.remove('drag-over');
-      const srcId = ev.dataTransfer?.getData('text/plain');
-      const dstId = item.dataset.chapterId;
-      if (srcId && dstId && srcId !== dstId) {
-        reorderChapterByIds(srcId, dstId);
-      }
-    });
-  }
-  
-  const iconSpan = document.createElement('span');
-  iconSpan.className = 'tree-icon';
-  iconSpan.textContent = icon;
-  
-  const labelSpan = document.createElement('span');
-  labelSpan.className = 'tree-label';
-  labelSpan.textContent = label;
-  // Inline rename on double-click for chapters
-  if (type === 'chapter' && data) {
-    labelSpan.addEventListener('dblclick', (ev) => {
-      ev.stopPropagation();
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = data.title || labelSpan.textContent || '';
-      input.className = 'tree-label';
-      item.replaceChild(input, labelSpan);
-      input.focus();
-      const commit = () => {
-        const newVal = input.value.trim();
-        if (newVal) {
-          data.title = newVal;
-        }
-        // restore label
-        labelSpan.textContent = data.title || label;
-        item.replaceChild(labelSpan, input);
-        if (currentProject) renderProjectStructure(currentProject);
-      };
-      input.addEventListener('blur', commit);
-      input.addEventListener('keydown', (e) => {
-        const k = e as KeyboardEvent;
-        if (k.key === 'Enter') {
-          commit();
-        } else if (k.key === 'Escape') {
-          item.replaceChild(labelSpan, input);
-        }
-      });
-    });
-  }
-  
-  item.appendChild(iconSpan);
-  item.appendChild(labelSpan);
-  
-  if (meta) {
-    const metaSpan = document.createElement('span');
-    metaSpan.className = 'tree-meta';
-    metaSpan.textContent = meta;
-    item.appendChild(metaSpan);
-  }
-
-  // Inline planner actions for chapters
-  if (type === 'chapter') {
-    const actions = document.createElement('div');
-    actions.className = 'tree-actions';
-    const btnUp = document.createElement('button');
-    btnUp.className = 'tree-action-btn';
-    btnUp.title = 'Move up';
-    btnUp.textContent = '↑';
-    const btnDown = document.createElement('button');
-    btnDown.className = 'tree-action-btn';
-    btnDown.title = 'Move down';
-    btnDown.textContent = '↓';
-    const btnRename = document.createElement('button');
-    btnRename.className = 'tree-action-btn';
-    btnRename.title = 'Rename';
-    btnRename.textContent = '✎';
-    const btnAddScene = document.createElement('button');
-    btnAddScene.className = 'tree-action-btn';
-    btnAddScene.title = 'Add scene';
-    btnAddScene.textContent = '+';
-    actions.appendChild(btnUp);
-    actions.appendChild(btnDown);
-    actions.appendChild(btnRename);
-    actions.appendChild(btnAddScene);
-    item.appendChild(actions);
-
-    btnUp.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      moveChapter(data, -1);
-    });
-    btnDown.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      moveChapter(data, +1);
-    });
-    btnRename.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      const newName = prompt('Rename chapter', data.title || 'Chapter');
-      if (newName && currentProject) {
-        data.title = newName;
-        renderProjectStructure(currentProject);
-      }
-    });
-    btnAddScene.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      if (!currentProject) return;
-      data.scenes = data.scenes || [];
-      const nextOrder = data.scenes.length + 1;
-      data.scenes.push({ id: `scene_${Date.now()}`, order: nextOrder, label: `Scene ${nextOrder}`, paragraphs: [] });
-      renderProjectStructure(currentProject);
-    });
-  }
-  
-  // Chapter selection handling
-  if (type === 'chapter' && data) {
-    item.addEventListener('click', () => {
-      // Remove active state from previous selection
-      if (currentChapterElement) {
-        currentChapterElement.classList.remove('active');
-      }
-      
-      // Set active state
-      item.classList.add('active');
-      currentChapterElement = item;
-      
-      // Load chapter content into editor
-      loadChapterContent(data);
-    });
-  }
-  
-  return item;
-}
-
-function moveChapter(chapter: any, delta: number) {
-  if (!currentProject) return;
-  const body = currentProject.sections?.find((s: any) => s.kind === 'body');
-  if (!body || !Array.isArray(body.chapters)) return;
-  const idx = body.chapters.findIndex((c: any) => c.id === chapter.id);
-  if (idx < 0) return;
-  const target = idx + delta;
-  if (target < 0 || target >= body.chapters.length) return;
-  // swap positions
-  const tmp = body.chapters[idx];
-  body.chapters[idx] = body.chapters[target];
-  body.chapters[target] = tmp;
-  // reassign order values
-  body.chapters.forEach((c: any, i: number) => c.order = i + 1);
-  renderProjectStructure(currentProject);
-}
-
-function reorderSceneByIds(chapterId: string, srcSceneId: string, dstSceneId: string) {
-  if (!currentProject) return;
-  const body = currentProject.sections?.find((s: any) => s.kind === 'body');
-  if (!body) return;
-  const chapter = body.chapters?.find((c: any) => c.id === chapterId);
-  if (!chapter || !Array.isArray(chapter.scenes)) return;
-  const srcIdx = chapter.scenes.findIndex((s: any) => s.id === srcSceneId);
-  const dstIdx = chapter.scenes.findIndex((s: any) => s.id === dstSceneId);
-  if (srcIdx < 0 || dstIdx < 0) return;
-  const [moved] = chapter.scenes.splice(srcIdx, 1);
-  chapter.scenes.splice(dstIdx, 0, moved);
-  chapter.scenes.forEach((s: any, i: number) => s.order = i + 1);
-  renderProjectStructure(currentProject);
-}
-
-function reorderChapterByIds(srcId: string, dstId: string) {
-  if (!currentProject) return;
-  const body = currentProject.sections?.find((s: any) => s.kind === 'body');
-  if (!body || !Array.isArray(body.chapters)) return;
-  const srcIdx = body.chapters.findIndex((c: any) => c.id === srcId);
-  const dstIdx = body.chapters.findIndex((c: any) => c.id === dstId);
-  if (srcIdx < 0 || dstIdx < 0) return;
-  const [moved] = body.chapters.splice(srcIdx, 1);
-  body.chapters.splice(dstIdx, 0, moved);
-  body.chapters.forEach((c: any, i: number) => c.order = i + 1);
-  renderProjectStructure(currentProject);
-}
-
-function getSectionIcon(kind: string): string {
-  switch (kind) {
-    case 'frontMatter': return '📑';
-    case 'body': return '📚';
-    case 'backMatter': return '📋';
-    default: return '📄';
-  }
-}
-
-function capitalizeKind(kind: string): string {
-  const words: Record<string, string> = {
-    'frontMatter': 'Front Matter',
-    'body': 'Body',
-    'backMatter': 'Back Matter'
-  };
-  return words[kind] || kind;
-}
-
-function getChapterMeta(chapter: any): string {
-  if (chapter.scenes) {
-    return `${chapter.scenes.length} scenes`;
-  } else if (chapter.paragraphs) {
-    return `${chapter.paragraphs.length}¶`;
-  }
-  return '';
-}
-
+/**
+ * Compute word count for chapter
+ */
 function chapterWordCount(chapter: any): number {
   let text = '';
   if (chapter.scenes && chapter.scenes.length > 0) {
