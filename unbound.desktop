@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=UNBOUND
+Comment=Professional novel writing application
+Exec=/home/michael/Desktop/UNBOUND/unbound.sh
+Path=/home/michael/Desktop/UNBOUND
+Icon=/home/michael/Desktop/UNBOUND/icon.png
+Terminal=false
+Categories=Office;WordProcessor;Literature;
+Keywords=writing;novel;manuscript;markdown;
+StartupNotify=true

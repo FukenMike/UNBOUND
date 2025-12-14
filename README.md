@@ -10,22 +10,35 @@ A native Qt6 C++ desktop application for manuscript writing and organization.
 - C++17 compiler (gcc/g++, clang, or MSVC)
 - Linux/macOS/Windows
 
-### Build & Run
+### Build
 
 ```bash
 cd ~/Desktop/UNBOUND
-mkdir -p build
+rm -rf build && mkdir -p build
 cd build
 cmake ..
 make -j$(nproc)
-./src/unbound
 ```
 
-**Or from any directory:**
+### Quick Launch
 
+**Option 1: Launch script (recommended)**
 ```bash
-/home/michael/Desktop/UNBOUND/build/src/unbound
+./unbound.sh
 ```
+
+**Option 2: Direct executable**
+```bash
+./build/src/unbound
+```
+
+**Option 3: Desktop entry**
+Install to applications menu:
+```bash
+cp unbound.desktop ~/.local/share/applications/
+chmod +x ~/.local/share/applications/unbound.desktop
+```
+Then launch from your application menu or desktop.
 
 ## User Interface
 
