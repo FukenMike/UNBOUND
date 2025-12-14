@@ -42,14 +42,16 @@ let currentChapterElement: HTMLElement | null = null;
 interface PanelState {
   structure: boolean;
   layout: boolean;
+  writing: boolean;
   planning: boolean;
   analysis: boolean;
   revision: boolean;
 }
 
 let panelState: PanelState = {
-  structure: false,
+  structure: true,
   layout: true,
+  writing: true,
   planning: false,
   analysis: false,
   revision: false
@@ -71,116 +73,64 @@ let layoutState = {
 };
 
 /**
- * Enforce Layout as the starting domain unless user has explicitly set preferences.
- * If there is no persisted panel state marker, set Layout visible and Structure hidden,
- * update the DOM and save the preference for subsequent sessions.
+ * Create a minimal blank project so UI always has content to render/select.
  */
-function enforceLayoutAsStart() {
-  const marker = localStorage.getItem('panel-state-initialized');
-  const hasProject = !!currentProject;
-  if (!marker && !hasProject) {
-    panelState.layout = true;
-    panelState.structure = false;
-    // Reflect in checkboxes if present
-    const toggleStructure = document.getElementById('toggle-structure') as HTMLInputElement | null;
-    const toggleLayout = document.getElementById('toggle-layout') as HTMLInputElement | null;
-    if (toggleStructure) toggleStructure.checked = false;
-    if (toggleLayout) toggleLayout.checked = true;
-    // Apply panel visibility immediately
-    const structurePanel = document.getElementById('panel-structure') as HTMLElement | null;
-    const layoutPanel = document.getElementById('panel-layout') as HTMLElement | null;
-    if (structurePanel) structurePanel.style.display = 'none';
-    if (layoutPanel) layoutPanel.style.display = 'block';
-    localStorage.setItem('panel-state-initialized', 'true');
-    localStorage.setItem('panel-structure-visible', 'false');
-    localStorage.setItem('panel-layout-visible', 'true');
-  }
+function createBlankProject(title: string) {
+  return {
+    id: `project_${Date.now()}`,
+    title: title || 'Untitled Project',
+    metadata: {},
+    sections: [
+      { kind: 'frontMatter', title: 'Front Matter', chapters: [] },
+      {
+        kind: 'body',
+        title: 'Body',
+        chapters: [
+          {
+            id: `chap_${Date.now()}`,
+            order: 1,
+            title: 'Chapter 1',
+            scenes: [
+              { id: `scene_${Date.now()}`, order: 1, label: 'Scene 1', paragraphs: [] }
+            ]
+          }
+        ]
+      },
+      { kind: 'backMatter', title: 'Back Matter', chapters: [] }
+    ]
+  };
 }
 
-/**
- * Hard override to guarantee Layout is shown on launch, independent of stale persisted state.
- * This is a safety net while we debug UI visibility issues.
- */
-function forceLayoutFirst() {
-  panelState.structure = false;
-  panelState.layout = true;
-  localStorage.setItem('panel-structure-visible', 'false');
-  localStorage.setItem('panel-layout-visible', 'true');
-  const structurePanel = document.getElementById('panel-structure') as HTMLElement | null;
-  const layoutPanel = document.getElementById('panel-layout') as HTMLElement | null;
-  if (structurePanel) structurePanel.style.display = 'none';
-  if (layoutPanel) layoutPanel.style.display = 'flex';
-  updateMenuCheckboxes();
-}
+// Remove legacy layout-forcing logic: we rely on balanced defaults
 
 // ==============================================================================
 // INITIALIZATION
 // ==============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('UNBOUND renderer initialized - multi-domain architecture');
-  // Hard cache clear for panel/layout state to avoid stale UI
-  clearUIStateCache();
-  
-  // Restore panel state from localStorage
-  restorePanelState();
+  console.log('UNBOUND renderer initializing');
 
-  // Hard override: ensure Layout is visible and Structure hidden on launch to avoid stale localStorage blocking UI
-  forceLayoutFirst();
+  initMenu();
+  initStructurePanel();
+  initLayoutPanel();
+  initWritingPanel();
+  attachGlobalHandlers();
+  renderStructurePanel();
+  renderWritingPanel();
 
-  // Ensure Layout is the starting point on first launch or when no project
-  enforceLayoutAsStart();
-  
-  // Initialize subsystems
-  initMenuBar();
-  initDropdownMenus();
-  initPanelControls();
-  initPanelResizing();
-  initStructureDomain();
-  initWritingDomain();
-  initLayoutDomain();
-  initAnalysisDomain();
-
-  // Nudge UI: ensure Layout details are expanded and visible on start
-  const layoutPanel = document.getElementById('panel-layout');
-  if (layoutPanel && layoutPanel.style.display !== 'none') {
-    const front = document.getElementById('layout-frontmatter') as HTMLDetailsElement | null;
-    const body = document.getElementById('layout-body') as HTMLDetailsElement | null;
-    const back = document.getElementById('layout-backmatter') as HTMLDetailsElement | null;
-    const visual = document.getElementById('layout-visual') as HTMLDetailsElement | null;
-    [front, body, back, visual].forEach(sec => { if (sec) sec.open = true; });
-    layoutPanel.scrollIntoView({ block: 'start' });
-  }
-  
   console.log('UNBOUND: All domains initialized');
 });
 
-/**
- * Remove persisted UI keys so stale cache cannot hide Layout. One-time safety.
- */
-function clearUIStateCache() {
-  const keys = [
-    'panel-state-initialized',
-    'panel-structure-visible',
-    'panel-layout-visible',
-    'panel-planning-visible',
-    'panel-analysis-visible',
-    'panel-revision-visible',
-    'sidebar-left-width',
-    'sidebar-right-width',
-    'editor-wrap-width',
-    'editor-line-height',
-    'editor-char-spacing',
-    'editor-paragraph-spacing',
-    'editor-page-tone',
-    'hidden-items-map'
-  ];
-  keys.forEach(k => localStorage.removeItem(k));
-}
+// Legacy cache clear removed; defaults and reset action now manage state
 
 // ==============================================================================
 // MENU BAR & COMMAND ACCESS LAYER
 // ==============================================================================
+
+function initMenu() {
+  initMenuBar();
+  initDropdownMenus();
+}
 
 /**
  * Initialize menu bar buttons to show/hide dropdown menus
@@ -294,12 +244,10 @@ function resetUIState() {
     'hidden-items-map'
   ];
   keys.forEach(k => localStorage.removeItem(k));
-  // Reapply Layout-first and update DOM
-  panelState = { structure: false, layout: true, planning: false, analysis: false, revision: false };
-  enforceLayoutAsStart();
+  panelState = { structure: true, layout: true, writing: true, planning: false, analysis: false, revision: false };
   togglePanelVisibility('structure', panelState.structure);
   togglePanelVisibility('layout', panelState.layout);
-  console.log('UI state reset. Layout is now the starting panel.');
+  console.log('UI state reset. Layout and Structure are visible.');
 }
 
 /**
@@ -325,7 +273,7 @@ function restorePanelState() {
     const visible = localStorage.getItem(`panel-${domain}-visible`) !== 'false';
     (panelState as any)[domain] = visible;
     
-    // Apply to DOM
+    // Apply to DOM if a panel exists for this domain
     const panelEl = document.getElementById(`panel-${domain}`);
     if (panelEl) {
       panelEl.style.display = visible ? 'flex' : 'none';
@@ -342,6 +290,7 @@ function updateMenuCheckboxes() {
   const checkboxes: Record<string, string> = {
     structure: '#toggle-structure',
     layout: '#toggle-layout',
+    writing: '#toggle-writing',
     planning: '#toggle-planning',
     analysis: '#toggle-analysis',
     revision: '#toggle-revision'
@@ -459,7 +408,13 @@ function initPanelResizing() {
  * Initialize Structure domain - document organization and navigation
  */
 function initStructureDomain() {
-  // Will be bound when project is loaded
+  if (!currentProject) {
+    currentProject = createBlankProject('Untitled Project');
+  }
+}
+
+function initStructurePanel() {
+  initStructureDomain();
 }
 
 /**
@@ -472,6 +427,7 @@ async function loadProject() {
       currentProject = project;
       renderProjectStructure(project);
       updateProjectInfo(project);
+      selectFirstChapter();
     }
   } catch (err) {
     console.error('Failed to load project:', err);
@@ -851,6 +807,8 @@ function addChapter() {
   body.chapters.push(newChapter);
   renderProjectStructure(currentProject);
   renderLayoutChapterList();
+  loadChapterContent(newChapter);
+  highlightChapterById(newChapter.id);
 }
 
 // ==============================================================================
@@ -921,6 +879,10 @@ function renderLayoutChapterList() {
     const row = document.createElement('div');
     row.className = 'toggle-row';
     row.textContent = c.title || 'Item';
+    row.addEventListener('click', () => {
+      loadChapterContent(c);
+      highlightChapterById(c.id);
+    });
     list.appendChild(row);
   });
 }
@@ -1041,6 +1003,10 @@ function initWritingDomain() {
   });
 }
 
+function initWritingPanel() {
+  initWritingDomain();
+}
+
 /**
  * Load chapter content into editor
  */
@@ -1110,6 +1076,38 @@ function updateChapterContent(text: string) {
     }
   } else {
     currentChapter.paragraphs = paragraphs;
+  }
+}
+
+function highlightChapterById(chapterId: string) {
+  const prev = currentChapterElement;
+  if (prev) prev.classList.remove('active');
+  const node = document.querySelector(`[data-chapter-id="${chapterId}"]`) as HTMLElement | null;
+  if (node) {
+    node.classList.add('active');
+    currentChapterElement = node;
+  }
+}
+
+function selectFirstChapter() {
+  if (!currentProject) return;
+  const body = currentProject.sections?.find((s: any) => s.kind === 'body');
+  const candidate = body?.chapters?.find((c: any) => isItemVisible(c));
+  if (candidate) {
+    renderProjectStructure(currentProject);
+    loadChapterContent(candidate);
+    highlightChapterById(candidate.id);
+    return;
+  }
+  // Fallback: first visible in any section
+  for (const section of currentProject.sections || []) {
+    const chap = section.chapters?.find((c: any) => isItemVisible(c));
+    if (chap) {
+      renderProjectStructure(currentProject);
+      loadChapterContent(chap);
+      highlightChapterById(chap.id);
+      return;
+    }
   }
 }
 
@@ -1187,6 +1185,10 @@ function initLayoutDomain() {
 
   // Restore layout state
   restoreLayoutState();
+}
+
+function initLayoutPanel() {
+  initLayoutDomain();
 }
 
 /**
@@ -1293,6 +1295,19 @@ function initAnalysisDomain() {
   // Analytics update happens on editor input via updateAnalytics()
 }
 
+// Rendering wrappers for startup sequence
+function renderStructurePanel() {
+  if (!currentProject) {
+    currentProject = createBlankProject('Untitled Project');
+  }
+  renderProjectStructure(currentProject);
+  updateProjectInfo(currentProject);
+}
+
+function renderWritingPanel() {
+  selectFirstChapter();
+}
+
 /**
  * Update analytics display
  */
@@ -1317,6 +1332,10 @@ function updateAnalytics() {
   if (statsAvgLine) statsAvgLine.textContent = avgLine.toString();
   
   updateProjectInfo(currentProject);
+}
+
+function attachGlobalHandlers() {
+  // Placeholder for future global listeners; ensures startup order requirement is met
 }
 
 /**
