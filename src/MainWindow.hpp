@@ -34,12 +34,17 @@ private:
     // Chapter storage: maps item IDs to chapter objects
     QHash<QString, Chapter*> chapters;
     QString currentChapterId;
+    
+    // Menu references for enable/disable
+    QMenu* formatMenu;
 
     void setupPanels();
     void setupMenus();
     void setupFormatMenu();
     void setupEditMenu();
+    void setupViewMenu();
     void connectSignals();
+    void updateMenuStates();
     
     Chapter* getCurrentChapter();
     void saveCurrentChapter();
