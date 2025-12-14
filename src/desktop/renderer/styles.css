@@ -67,6 +67,29 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Page Tone: override CSS variables for visual ambience */
+body[data-page-tone="dark"] {
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #222222;
+  --bg-tertiary: #2a2a2a;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0a0;
+}
+body[data-page-tone="neutral"] {
+  --bg-primary: #1f1f1f;
+  --bg-secondary: #262626;
+  --bg-tertiary: #2e2e2e;
+  --text-primary: #e6e6e6;
+  --text-secondary: #b0b0b0;
+}
+body[data-page-tone="light"] {
+  --bg-primary: #f5f7fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f0f2f6;
+  --text-primary: #222;
+  --text-secondary: #555;
+}
+
 .app {
   display: flex;
   flex-direction: column;
@@ -420,6 +443,44 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+}
+
+/* Layout domain collapsible sections */
+.layout-section {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+}
+.layout-section > summary {
+  cursor: pointer;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  user-select: none;
+}
+.layout-section[open] > summary {
+  color: var(--text-primary);
+}
+.layout-section .layout-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 var(--spacing-md) var(--spacing-md);
+}
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+}
+.subsection { margin-top: var(--spacing-sm); }
+.subheader { font-size: var(--font-size-sm); color: var(--text-muted); margin-bottom: 6px; }
+.subaction { font-size: var(--font-size-sm); margin-bottom: var(--spacing-sm); }
+.chapter-list { display: flex; flex-direction: column; gap: 4px; }
+
+.tone-preset {
+  padding: 4px 10px;
+  font-size: var(--font-size-sm);
 }
 
 .control-group {

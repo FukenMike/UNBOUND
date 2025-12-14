@@ -140,27 +140,81 @@
           <button class="panel-close-btn" data-panel="panel-layout" title="Close">×</button>
         </div>
         <div class="panel-content">
-          <div class="layout-controls">
-            <label class="control-group">
-              <span class="control-label">Line Width</span>
-              <div class="button-group">
-                <button class="layout-preset" data-width="600">Narrow</button>
-                <button class="layout-preset" data-width="800">Medium</button>
-                <button class="layout-preset active" data-width="1000">Wide</button>
-                <button class="layout-preset" data-width="0">Full</button>
-              </div>
-            </label>
-            <label class="control-group">
-              <span class="control-label">Line Height</span>
-              <input type="range" id="line-height-slider-panel" min="1.2" max="2.5" step="0.1" value="1.8" />
-              <span id="line-height-display" class="control-value">1.8</span>
-            </label>
-            <label class="control-group">
-              <span class="control-label">Char Spacing</span>
-              <input type="range" id="char-spacing-slider" min="-0.05" max="0.1" step="0.01" value="0" />
-              <span id="char-spacing-display" class="control-value">0</span>
-            </label>
-          </div>
+            <div class="layout-controls">
+              <!-- Book Composition: Front Matter -->
+              <details class="layout-section" id="layout-frontmatter" open>
+                <summary>Front Matter</summary>
+                <div class="layout-list">
+                  <label class="toggle-row"><input type="checkbox" data-layout-toggle="front:copyright" /> Copyright</label>
+                  <label class="toggle-row"><input type="checkbox" data-layout-toggle="front:dedication" /> Dedication</label>
+                  <label class="toggle-row"><input type="checkbox" data-layout-toggle="front:epigraph" /> Epigraph</label>
+                  <label class="toggle-row"><input type="checkbox" data-layout-toggle="front:toc" /> Table of Contents</label>
+                  <label class="toggle-row"><input type="checkbox" data-layout-toggle="front:foreword" /> Foreword</label>
+                  <label class="toggle-row"><input type="checkbox" data-layout-toggle="front:preface" /> Preface</label>
+                  <label class="toggle-row"><input type="checkbox" data-layout-toggle="front:acknowledgments" /> Acknowledgments</label>
+                </div>
+              </details>
+
+              <!-- Book Composition: Body -->
+              <details class="layout-section" id="layout-body" open>
+                <summary>Body</summary>
+                <div class="layout-list">
+                  <label class="toggle-row"><input type="checkbox" data-layout-toggle="body:prologue" /> Prologue</label>
+                  <label class="toggle-row"><input type="checkbox" data-layout-toggle="body:introduction" /> Introduction</label>
+                  <div class="subsection">
+                    <div class="subheader">Chapters</div>
+                    <button id="layout-add-chapter" class="subaction">+ Add Chapter</button>
+                    <div id="layout-chapter-list" class="chapter-list"></div>
+                  </div>
+                </div>
+              </details>
+
+              <!-- Book Composition: Back Matter -->
+              <details class="layout-section" id="layout-backmatter" open>
+                <summary>Back Matter</summary>
+                <div class="layout-list">
+                  <label class="toggle-row"><input type="checkbox" data-layout-toggle="back:notes" /> Notes</label>
+                  <label class="toggle-row"><input type="checkbox" data-layout-toggle="back:about" /> About the Author</label>
+                </div>
+              </details>
+
+              <!-- Visual Settings -->
+              <details class="layout-section" id="layout-visual" open>
+                <summary>Visual Settings</summary>
+                <label class="control-group">
+                  <span class="control-label">Line Width</span>
+                  <div class="button-group">
+                    <button class="layout-preset" data-width="600">Narrow</button>
+                    <button class="layout-preset" data-width="800">Medium</button>
+                    <button class="layout-preset active" data-width="1000">Wide</button>
+                    <button class="layout-preset" data-width="0">Full</button>
+                  </div>
+                </label>
+                <label class="control-group">
+                  <span class="control-label">Line Height</span>
+                  <input type="range" id="line-height-slider-panel" min="1.2" max="2.5" step="0.1" value="1.8" />
+                  <span id="line-height-display" class="control-value">1.8</span>
+                </label>
+                <label class="control-group">
+                  <span class="control-label">Paragraph Spacing</span>
+                  <input type="range" id="paragraph-spacing-slider" min="0" max="24" step="1" value="0" />
+                  <span id="paragraph-spacing-display" class="control-value">0</span>
+                </label>
+                <label class="control-group">
+                  <span class="control-label">Char Spacing</span>
+                  <input type="range" id="char-spacing-slider" min="-0.05" max="0.1" step="0.01" value="0" />
+                  <span id="char-spacing-display" class="control-value">0</span>
+                </label>
+                <label class="control-group">
+                  <span class="control-label">Page Tone</span>
+                  <div class="button-group">
+                    <button class="tone-preset" data-tone="dark">Dark</button>
+                    <button class="tone-preset" data-tone="neutral">Neutral</button>
+                    <button class="tone-preset" data-tone="light">Light</button>
+                  </div>
+                </label>
+              </details>
+            </div>
         </div>
       </div>
 

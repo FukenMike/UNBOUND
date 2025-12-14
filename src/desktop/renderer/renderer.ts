@@ -65,7 +65,9 @@ let panelSizes = {
 let layoutState = {
   wrapWidth: parseInt(localStorage.getItem('editor-wrap-width') || '1000'),
   lineHeight: parseFloat(localStorage.getItem('editor-line-height') || '1.8'),
-  charSpacing: parseFloat(localStorage.getItem('editor-char-spacing') || '0')
+  charSpacing: parseFloat(localStorage.getItem('editor-char-spacing') || '0'),
+  paragraphSpacing: parseInt(localStorage.getItem('editor-paragraph-spacing') || '0'),
+  pageTone: localStorage.getItem('editor-page-tone') || 'dark'
 };
 
 // ==============================================================================
@@ -399,7 +401,9 @@ function renderProjectStructure(project: any) {
       
       // Chapters
       if (section.chapters && section.chapters.length > 0) {
-        section.chapters.forEach((chapter: any) => {
+        section.chapters
+          .filter((chapter: any) => isItemVisible(chapter))
+          .forEach((chapter: any) => {
           const chapterNode = createTreeItem(
             '📖',
             chapter.title || `Item ${chapter.order}`,
@@ -456,7 +460,7 @@ function renderProjectStructure(project: any) {
           
           sectionContainer.appendChild(chapterNode);
           sectionContainer.appendChild(chapterContainer);
-        });
+          });
       }
       
       treeContainer.appendChild(sectionNode);
@@ -466,6 +470,7 @@ function renderProjectStructure(project: any) {
   
   // Update structure metadata
   updateStructureMeta();
+  renderLayoutChapterList();
 }
 
 /**
@@ -726,6 +731,131 @@ function addChapter() {
   body.chapters = body.chapters || [];
   body.chapters.push(newChapter);
   renderProjectStructure(currentProject);
+  renderLayoutChapterList();
+}
+
+// ==============================================================================
+// LAYOUT TOGGLES: Add / Hide / Delete items
+// ==============================================================================
+
+/**
+ * Handle layout toggle for book composition items.
+ * Key format: "front:copyright", "body:prologue", "back:about"
+ */
+function handleLayoutToggle(key: string, enabled: boolean) {
+  if (!currentProject) return;
+  const [sectionKind, itemKind] = key.split(':');
+  ensureSection(sectionKind);
+  const section = currentProject.sections.find((s: any) => s.kind === mapSectionKind(sectionKind));
+  if (!section) return;
+
+  // Find existing item by title convention
+  const title = getLayoutItemTitle(sectionKind, itemKind);
+  section.chapters = section.chapters || [];
+  const existing = section.chapters.find((c: any) => c.title === title);
+
+  if (enabled) {
+    // Create if missing
+    if (!existing) {
+      const newItem = {
+        id: `item_${sectionKind}_${itemKind}_${Date.now()}`,
+        order: (section.chapters.length || 0) + 1,
+        title,
+        paragraphs: []
+      };
+      section.chapters.push(newItem);
+    } else {
+      // Unhide if previously hidden
+      setItemHidden(existing.id, false);
+    }
+    renderProjectStructure(currentProject);
+    renderLayoutChapterList();
+  } else {
+    if (!existing) return;
+    // Ask user: Hide (keep) or Delete (destroy)
+    const choice = confirm(`Turn off "${title}"?\nOK = Hide (keep for later)\nCancel = Remove permanently`);
+    if (choice) {
+      // Hide
+      setItemHidden(existing.id, true);
+    } else {
+      // Remove permanently
+      const idx = section.chapters.findIndex((c: any) => c.id === existing.id);
+      if (idx >= 0) section.chapters.splice(idx, 1);
+    }
+    renderProjectStructure(currentProject);
+    renderLayoutChapterList();
+  }
+}
+
+/**
+ * Render the chapter list in Layout panel (Body section)
+ */
+function renderLayoutChapterList() {
+  const list = document.getElementById('layout-chapter-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!currentProject) return;
+  const body = currentProject.sections?.find((s: any) => s.kind === 'body');
+  if (!body || !Array.isArray(body.chapters)) return;
+  const chapters = body.chapters.filter((c: any) => isItemVisible(c));
+  chapters.forEach((c: any) => {
+    const row = document.createElement('div');
+    row.className = 'toggle-row';
+    row.textContent = c.title || 'Item';
+    list.appendChild(row);
+  });
+}
+
+function ensureSection(sectionKey: string) {
+  const kind = mapSectionKind(sectionKey);
+  if (!currentProject) return;
+  currentProject.sections = currentProject.sections || [];
+  let section = currentProject.sections.find((s: any) => s.kind === kind);
+  if (!section) {
+    section = { kind, title: capitalizeKind(kind), chapters: [] };
+    currentProject.sections.push(section);
+  }
+}
+
+function mapSectionKind(sectionKey: string): string {
+  switch (sectionKey) {
+    case 'front': return 'frontMatter';
+    case 'body': return 'body';
+    case 'back': return 'backMatter';
+    default: return sectionKey;
+  }
+}
+
+function getLayoutItemTitle(sectionKey: string, itemKey: string): string {
+  const titles: Record<string, string> = {
+    'front:copyright': 'Copyright',
+    'front:dedication': 'Dedication',
+    'front:epigraph': 'Epigraph',
+    'front:toc': 'Table of Contents',
+    'front:foreword': 'Foreword',
+    'front:preface': 'Preface',
+    'front:acknowledgments': 'Acknowledgments',
+    'body:prologue': 'Prologue',
+    'body:introduction': 'Introduction',
+    'back:notes': 'Notes',
+    'back:about': 'About the Author'
+  };
+  return titles[`${sectionKey}:${itemKey}`] || itemKey;
+}
+
+// Hidden items persistence via localStorage
+function setItemHidden(id: string, hidden: boolean) {
+  const key = 'layout-hidden-map';
+  const map = JSON.parse(localStorage.getItem(key) || '{}');
+  map[id] = hidden;
+  localStorage.setItem(key, JSON.stringify(map));
+}
+
+function isItemVisible(chapter: any): boolean {
+  const key = 'layout-hidden-map';
+  const map = JSON.parse(localStorage.getItem(key) || '{}');
+  if (chapter && chapter.id && map[chapter.id] === true) return false;
+  return true;
 }
 
 /**
@@ -894,6 +1024,15 @@ function initLayoutDomain() {
     if (lineHeightDisplay) lineHeightDisplay.textContent = value.toFixed(1);
   });
   
+  // Paragraph spacing slider (visual intent; textarea limitation acknowledged)
+  const paraSlider = document.getElementById('paragraph-spacing-slider') as HTMLInputElement;
+  const paraDisplay = document.getElementById('paragraph-spacing-display');
+  paraSlider?.addEventListener('input', () => {
+    const value = parseInt(paraSlider.value);
+    setParagraphSpacing(value);
+    if (paraDisplay) paraDisplay.textContent = value.toString();
+  });
+
   // Character spacing slider
   const charSpacingSlider = document.getElementById('char-spacing-slider') as HTMLInputElement;
   const charSpacingDisplay = document.getElementById('char-spacing-display');
@@ -904,6 +1043,29 @@ function initLayoutDomain() {
     if (charSpacingDisplay) charSpacingDisplay.textContent = value.toFixed(2);
   });
   
+  // Page tone presets
+  document.querySelectorAll('.tone-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tone = (btn as HTMLElement).dataset.tone || 'dark';
+      setPageTone(tone);
+    });
+  });
+
+  // Book composition toggles
+  document.querySelectorAll('[data-layout-toggle]').forEach(t => {
+    t.addEventListener('change', (ev) => {
+      const checkbox = ev.target as HTMLInputElement;
+      const key = (checkbox.dataset.layoutToggle || '').trim(); // e.g., front:copyright
+      handleLayoutToggle(key, checkbox.checked);
+    });
+  });
+
+  // Add chapter button
+  const addChapterBtn = document.getElementById('layout-add-chapter');
+  addChapterBtn?.addEventListener('click', () => {
+    addChapter();
+  });
+
   // Restore layout state
   restoreLayoutState();
 }
@@ -953,12 +1115,36 @@ function setCharSpacing(value: number) {
 }
 
 /**
+ * Set paragraph spacing (visual intent; limited effect with textarea)
+ */
+function setParagraphSpacing(px: number) {
+  const editor = document.getElementById('editor') as HTMLTextAreaElement;
+  if (!editor) return;
+  layoutState.paragraphSpacing = px;
+  // Approximate via extra padding to reduce perceived density
+  editor.style.paddingTop = `${px}px`;
+  editor.style.paddingBottom = `${px}px`;
+  localStorage.setItem('editor-paragraph-spacing', px.toString());
+}
+
+/**
+ * Set page tone (dark/neutral/light) using body data attribute
+ */
+function setPageTone(tone: string) {
+  layoutState.pageTone = tone;
+  document.body.dataset.pageTone = tone;
+  localStorage.setItem('editor-page-tone', tone);
+}
+
+/**
  * Restore layout state from localStorage
  */
 function restoreLayoutState() {
   setWrapWidth(layoutState.wrapWidth);
   setLineHeight(layoutState.lineHeight);
   setCharSpacing(layoutState.charSpacing);
+  setParagraphSpacing(layoutState.paragraphSpacing);
+  setPageTone(layoutState.pageTone);
   
   // Update sliders
   const lineHeightSlider = document.getElementById('line-height-slider-panel') as HTMLInputElement;
@@ -970,6 +1156,11 @@ function restoreLayoutState() {
   const charSpacingDisplay = document.getElementById('char-spacing-display');
   if (charSpacingSlider) charSpacingSlider.value = layoutState.charSpacing.toString();
   if (charSpacingDisplay) charSpacingDisplay.textContent = layoutState.charSpacing.toFixed(2);
+
+  const paraSlider = document.getElementById('paragraph-spacing-slider') as HTMLInputElement;
+  const paraDisplay = document.getElementById('paragraph-spacing-display');
+  if (paraSlider) paraSlider.value = layoutState.paragraphSpacing.toString();
+  if (paraDisplay) paraDisplay.textContent = layoutState.paragraphSpacing.toString();
 }
 
 // ==============================================================================
