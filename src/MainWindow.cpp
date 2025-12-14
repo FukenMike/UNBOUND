@@ -18,10 +18,6 @@ MainWindow::MainWindow(QWidget* parent)
 
     setupPanels();
     connectSignals();
-
-    // Create a minimal central widget
-    auto* centralWidget = new QWidget(this);
-    setCentralWidget(centralWidget);
 }
 
 void MainWindow::setupPanels()
