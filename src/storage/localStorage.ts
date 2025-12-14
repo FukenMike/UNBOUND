@@ -47,6 +47,9 @@ export class LocalStorage implements IStorage {
    */
   async save(document: Document): Promise<void> {
     try {
+      // Ensure storage directory exists
+      await fs.mkdir(this.basePath, { recursive: true });
+      
       const filePath = this.getDocumentPath(document.id);
       
       // Create backup if it exists
